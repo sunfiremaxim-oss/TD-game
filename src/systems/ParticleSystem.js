@@ -1,0 +1,166 @@
+/**
+ * ParticleSystem.js
+ * Manages geometric neon debris, shockwave rings, and floating combat text.
+ */
+
+export class ParticleSystem {
+  constructor() {
+    this.particles = [];
+    this.shockwaves = [];
+    this.floatingTexts = [];
+  }
+
+  init(world) {
+    // 1. Damage dealt: hit sparks only (no screen-cluttering damage numbers)
+    world.eventBus.on('DAMAGE_DEALT', (event) => {
+      this._spawnDamageSparks(event.x, event.y, event.isCrit ? '#ffe600' : '#00f3ff', event.isCrit ? 10 : 5);
+    });
+
+    // 2. Kill bounty: clean and rewarding floating currency text (+X ◈)
+    world.eventBus.on('CREDITS_CHANGED', (event) => {
+      if (event.source === 'kill' && event.earned > 0 && event.x !== undefined && event.y !== undefined) {
+        this.floatingTexts.push({
+          x: event.x + (Math.random() * 10 - 5),
+          y: event.y - 12,
+          text: `+${event.earned} ◈`,
+          color: '#00ff88', // Vibrant cyber-cash neon green (distinct from white/yellow damage)
+          fontSize: event.earned >= 30 ? 22 : 18,
+          isCrit: event.earned >= 30, // Extra glow for high-value targets like tanks
+          vy: 60,
+          life: 1.0,
+          maxLife: 1.0
+        });
+      }
+    });
+
+    // 2. Entity explosion: bursting shards + expanding shockwave
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      const colorMap = {
+        scout: '#ffe600',
+        fighter: '#ff0055',
+        tank: '#9d00ff',
+        sniper: '#ff7700',
+        aegis: '#00e5ff',
+        splitter: '#00ff66',
+        splitter_shard: '#00ff66',
+        blinker: '#ffffff',
+        boss_architect: '#ff0055',
+        boss_shield: '#00f3ff'
+      };
+      const color = colorMap[event.enemyType] || '#00f3ff';
+      const isBoss = event.enemyType === 'boss_architect';
+
+      // Burst of fragments
+      const particleCount = isBoss ? 45 : (event.enemyType === 'tank' || event.enemyType === 'splitter' ? 24 : 14);
+      this._spawnExplosion(event.x, event.y, color, particleCount);
+
+      // Expanding neon shockwave
+      this.shockwaves.push({
+        x: event.x,
+        y: event.y,
+        radius: 6,
+        maxRadius: isBoss ? 90 : (event.enemyType === 'tank' ? 55 : 35),
+        color,
+        lineWidth: isBoss ? 5 : 3,
+        life: isBoss ? 0.75 : 0.45,
+        maxLife: isBoss ? 0.75 : 0.45
+      });
+    });
+
+    // 3. Sniper muzzle flare or shot effect
+    world.eventBus.on('ENEMY_SNIPER_SHOT', (event) => {
+      this._spawnDamageSparks(event.x, event.y, '#ff7700', 6);
+    });
+  }
+
+  update(world, deltaTime) {
+    // 1. Update particles
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx * deltaTime;
+      p.y += p.vy * deltaTime;
+      p.vx *= 0.94; // friction
+      p.vy *= 0.94;
+      p.rotation += p.vRot * deltaTime;
+      p.life -= deltaTime;
+
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+
+    // 2. Update shockwaves
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.life -= deltaTime;
+      const progress = 1 - (sw.life / sw.maxLife);
+      sw.radius = 6 + (sw.maxRadius - 6) * progress;
+
+      if (sw.life <= 0) {
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
+    // 3. Update floating texts
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.y -= ft.vy * deltaTime;
+      ft.vy *= 0.96;
+      ft.life -= deltaTime;
+
+      if (ft.life <= 0) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
+  }
+
+  _spawnDamageSparks(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 70 + Math.random() * 120;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 10,
+        size: 2.5 + Math.random() * 2,
+        color,
+        life: 0.35 + Math.random() * 0.2,
+        maxLife: 0.55
+      });
+    }
+  }
+
+  _spawnExplosion(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 100 + Math.random() * 220;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 15,
+        size: 3 + Math.random() * 4,
+        color,
+        life: 0.45 + Math.random() * 0.35,
+        maxLife: 0.8
+      });
+    }
+  }
+
+  getParticles() {
+    return this.particles;
+  }
+
+  getShockwaves() {
+    return this.shockwaves;
+  }
+
+  getFloatingTexts() {
+    return this.floatingTexts;
+  }
+}

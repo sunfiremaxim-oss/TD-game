@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geometric Neon Cyberpunk - Tower Defense ECS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game-app">
+    <!-- TOP STATUS HUD -->
+    <header id="top-hud">
+      <div class="hud-group">
+        <div id="hud-wave" class="hud-badge">ВОЛНА 01</div>
+        <div id="hud-enemies" class="hud-badge enemies">ВРАГИ: 0</div>
+      </div>
+
+      <!-- 5-SECOND INTERMISSION COUNTDOWN BAR -->
+      <div id="intermission-container" class="hidden">
+        <div id="intermission-text">ПЕРЕРЫВ: 5.0s (ВОЛНА 02)</div>
+        <div class="intermission-bar-bg">
+          <div id="intermission-bar"></div>
+        </div>
+      </div>
+
+      <!-- CREDITS & HEALTH -->
+      <div class="hud-group">
+        <div id="hud-credits" class="hud-credits">100 ◈</div>
+        
+        <div class="hp-container">
+          <div class="hp-bar-bg">
+            <div id="hud-hp-fill"></div>
+          </div>
+          <div id="hud-hp-text">600 / 600 (+1.0/с)</div>
+        </div>
+
+        <div class="speed-controls" id="speed-controls">
+          <button id="btn-speed-1" class="speed-btn active" data-speed="1" title="Скорость 1x">1x</button>
+          <button id="btn-speed-2" class="speed-btn" data-speed="2" title="Скорость 2x">2x</button>
+          <button id="btn-speed-3" class="speed-btn" data-speed="3" title="Скорость 3x">3x</button>
+        </div>
+        <div class="audio-controls-group">
+          <button id="btn-sound-sfx" class="icon-btn audio-btn" title="Звуки игры: 100% (Клик: изменить громкость, ПКМ: выкл)">
+            <span class="audio-icon">🔊</span>
+            <span class="audio-label">ЗВУК</span>
+          </button>
+          <button id="btn-sound-music" class="icon-btn audio-btn" title="Фоновая музыка: 100% (Клик: изменить громкость, ПКМ: выкл)">
+            <span class="audio-icon">🎵</span>
+            <span class="audio-label">МУЗЫКА</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN VIEWPORT -->
+    <main id="game-viewport">
+      <!-- CANVAS WRAPPER -->
+      <div id="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- TARGET PRIORITY OVERLAY -->
+        <div id="strategy-overlay">
+          <span class="overlay-label">ПРИОРИТЕТ ЦЕЛИ:</span>
+          <div class="strat-buttons">
+            <button id="strat-closest" class="strat-btn active">БЛИЖАЙШИЙ</button>
+            <button id="strat-strongest" class="strat-btn">СИЛЬНЕЙШИЙ</button>
+            <button id="strat-weakest" class="strat-btn">СЛАБЕЙШИЙ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPGRADE DECK SIDEBAR -->
+      <aside id="sidebar">
+        <div class="sidebar-header">СИСТЕМА УЛУЧШЕНИЙ [14]</div>
+        
+        <div class="tabs-container">
+          <button id="tab-offense" class="tab-btn active">ОРУЖИЕ</button>
+          <button id="tab-defense" class="tab-btn">ЗАЩИТА</button>
+          <button id="tab-utility" class="tab-btn">ЭКОНОМИКА</button>
+        </div>
+
+        <div id="upgrades-list">
+          <!-- Dynamic cards rendered by UIManager -->
+        </div>
+      </aside>
+    </main>
+
+    <!-- GAME OVER MODAL -->
+    <div id="modal-gameover" class="modal-backdrop hidden">
+      <div class="modal-content">
+        <h2 class="modal-title">СИСТЕМА СБИТА</h2>
+        <div class="modal-body">
+          <p>Центральное ядро уничтожено роем.</p>
+          <p>Достигнутый рубеж: <span id="modal-final-wave">ВОЛНА 01</span></p>
+        </div>
+        <button id="btn-restart" class="modal-btn">ПЕРЕЗАПУСТИТЬ СИСТЕМУ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ENTRY MODULE -->
+  <script type="module" src="src/main.js?v=2.2"></script>
+</body>
+</html>

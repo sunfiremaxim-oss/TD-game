@@ -1,0 +1,4531 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Geometric Neon Cyberpunk - Tower Defense ECS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+/* ==========================================================================
+   GEOMETRIC NEON CYBERPUNK THEME - TOWER DEFENSE
+   HIGH-READABILITY & HIGH-CONTRAST REFINED STYLESHEET
+   ========================================================================== */
+
+:root {
+  --bg-main: #06080e;
+  --bg-panel: #0d131f;
+  --bg-card: #131c2b;
+  --bg-card-hover: #1b263b;
+  
+  --border-neon: rgba(0, 243, 255, 0.45);
+  --border-neon-bright: #00f3ff;
+  --border-dim: rgba(0, 243, 255, 0.25);
+  
+  --neon-cyan: #00f3ff;
+  --neon-yellow: #ffe600;
+  --neon-crimson: #ff1a66;
+  --neon-purple: #a824ff;
+  --neon-orange: #ff7700;
+  --neon-green: #00ff88;
+
+  --text-main: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-dim: #94a3b8;
+  --text-cyan: #00f3ff;
+  
+  --font-cyber: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Consolas', 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+}
+
+body {
+  background-color: var(--bg-main);
+  color: var(--text-main);
+  font-family: var(--font-ui);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   GAME CONTAINER & LAYOUT
+   ========================================================================== */
+
+#game-app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+/* TOP STATUS HUD */
+#top-hud {
+  height: 74px;
+  background: linear-gradient(180deg, #0e1524 0%, rgba(11, 16, 28, 0.96) 100%);
+  border-bottom: 2px solid var(--border-neon);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(0, 243, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 20;
+}
+
+.hud-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.hud-badge {
+  font-family: var(--font-cyber);
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 8px 18px;
+  background: rgba(0, 243, 255, 0.12);
+  border: 2px solid var(--neon-cyan);
+  border-radius: 6px;
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.8), 0 2px 4px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.25);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-badge.enemies {
+  color: #ffe600;
+  border-color: var(--neon-yellow);
+  background: rgba(255, 230, 0, 0.12);
+  text-shadow: 0 0 10px rgba(255, 230, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 14px rgba(255, 230, 0, 0.25);
+}
+
+.hud-credits {
+  font-family: var(--font-cyber);
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffe600;
+  text-shadow: 0 0 12px rgba(255, 230, 0, 0.8), 0 2px 4px #000000;
+  background: rgba(255, 230, 0, 0.08);
+  border: 1.5px solid rgba(255, 230, 0, 0.45);
+  border-radius: 6px;
+  padding: 6px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.hud-credits.pulse {
+  transform: scale(1.18);
+  color: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 0 20px #ffe600;
+}
+
+/* Intermission countdown centered in top bar */
+#intermission-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 320px;
+  transition: opacity 0.3s ease;
+}
+
+#intermission-container.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#intermission-text {
+  font-family: var(--font-cyber);
+  font-size: 14px;
+  font-weight: 900;
+  color: #ffe600;
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  text-shadow: 0 0 14px rgba(255, 230, 0, 0.9), 0 2px 4px #000000;
+  animation: neon-glow-pulse 1.2s infinite alternate;
+}
+
+@keyframes neon-glow-pulse {
+  0% { text-shadow: 0 0 10px rgba(255, 230, 0, 0.7); }
+  100% { text-shadow: 0 0 20px rgba(255, 230, 0, 1), 0 0 30px rgba(0, 243, 255, 0.6); }
+}
+
+.intermission-bar-bg {
+  width: 100%;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(0, 243, 255, 0.45);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(0, 243, 255, 0.25), inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#intermission-bar {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #00f3ff, #ffe600);
+  box-shadow: 0 0 15px #00f3ff, 0 0 25px rgba(255, 230, 0, 0.7);
+  transition: width 0.1s linear;
+}
+
+/* Tower HP Bar */
+.hp-container {
+  display: flex;
+  flex-direction: column;
+  width: 220px;
+}
+
+.hp-bar-bg {
+  width: 100%;
+  height: 14px;
+  background: rgba(0, 0, 0, 0.7);
+  border: 2px solid rgba(255, 26, 102, 0.6);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+#hud-hp-fill {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon-crimson), var(--neon-green));
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.7);
+  transition: width 0.2s ease;
+}
+
+#hud-hp-text {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow: 0 1px 3px #000000, 0 0 6px rgba(0, 243, 255, 0.4);
+  text-align: right;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Speed and Audio Buttons */
+.icon-btn {
+  background: rgba(0, 243, 255, 0.12);
+  border: 2px solid var(--border-neon);
+  color: #ffffff;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: var(--font-cyber);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+  text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+.icon-btn:hover {
+  background: rgba(0, 243, 255, 0.3);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.6);
+  color: #ffffff;
+}
+
+.icon-btn.active {
+  background: var(--neon-cyan);
+  color: #060912;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.9);
+  text-shadow: none;
+}
+
+.icon-btn.muted {
+  opacity: 0.6;
+}
+
+/* ==========================================================================
+   MAIN GAMEPLAY VIEW (CANVAS + SIDEBAR)
+   ========================================================================== */
+
+#game-viewport {
+  flex: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+/* CANVAS */
+#canvas-wrapper {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-main);
+}
+
+#game-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Canvas targeting overlay control */
+#strategy-overlay {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: rgba(10, 15, 26, 0.94);
+  border: 2px solid var(--border-neon);
+  border-radius: 8px;
+  padding: 12px 18px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 243, 255, 0.2);
+  z-index: 10;
+}
+
+.overlay-label {
+  font-family: var(--font-cyber);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  color: #a8c5e2;
+  font-weight: 900;
+  text-shadow: 0 0 6px rgba(0, 243, 255, 0.4);
+}
+
+.strat-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.strat-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  color: #e2f4ff;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  border-radius: 5px;
+  transition: all 0.2s ease;
+}
+
+.strat-btn:hover {
+  border-color: var(--neon-cyan);
+  color: #ffffff;
+  background: rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+}
+
+.strat-btn.active {
+  background: rgba(0, 243, 255, 0.25);
+  border-color: var(--neon-cyan);
+  color: #ffffff;
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.6);
+  text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+/* ==========================================================================
+   UPGRADE SIDEBAR
+   ========================================================================== */
+
+#sidebar {
+  width: 380px;
+  background-color: var(--bg-panel);
+  border-left: 2px solid var(--border-neon);
+  display: flex;
+  flex-direction: column;
+  z-index: 15;
+  box-shadow: -6px 0 30px rgba(0, 0, 0, 0.7);
+}
+
+.sidebar-header {
+  padding: 18px 20px;
+  border-bottom: 2px solid var(--border-neon);
+  font-family: var(--font-cyber);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+/* TABS */
+.tabs-container {
+  display: flex;
+  border-bottom: 2px solid var(--border-neon);
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 8px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #94a3b8;
+  font-family: var(--font-cyber);
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: #ffffff;
+  background: rgba(0, 243, 255, 0.08);
+}
+
+.tab-btn.active {
+  color: var(--neon-cyan);
+  border-bottom-color: var(--neon-cyan);
+  background: rgba(0, 243, 255, 0.12);
+  text-shadow: 0 0 10px rgba(0, 243, 255, 0.8);
+  box-shadow: inset 0 -3px 10px rgba(0, 243, 255, 0.3);
+}
+
+/* UPGRADES LIST */
+#upgrades-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#upgrades-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#upgrades-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.5);
+  border-left: 1px solid rgba(0, 243, 255, 0.15);
+}
+
+#upgrades-list::-webkit-scrollbar-thumb {
+  background: var(--neon-cyan);
+  border-radius: 4px;
+  box-shadow: 0 0 10px var(--neon-cyan);
+}
+
+/* UPGRADE CARD */
+.upgrade-card {
+  background-color: var(--bg-card);
+  border: 1.5px solid rgba(0, 243, 255, 0.25);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.upgrade-card:hover {
+  background-color: var(--bg-card-hover);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 4px 18px rgba(0, 243, 255, 0.25);
+}
+
+.upgrade-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.upgrade-title {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upgrade-lvl {
+  font-family: var(--font-cyber);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 3px 8px;
+  background: rgba(0, 243, 255, 0.12);
+  border: 1.5px solid var(--neon-cyan);
+  border-radius: 4px;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 6px var(--neon-cyan);
+}
+
+.upgrade-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.stat-current {
+  color: var(--text-secondary);
+}
+
+.stat-arrow {
+  color: var(--neon-cyan);
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.stat-next {
+  color: var(--neon-green);
+  font-size: 16px;
+  font-weight: 800;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.6);
+}
+
+.upgrade-buy-btn {
+  background: rgba(0, 243, 255, 0.15);
+  border: 2px solid var(--neon-cyan);
+  color: #ffffff;
+  font-family: var(--font-cyber);
+  font-size: 14px;
+  font-weight: 900;
+  padding: 10px 14px;
+  border-radius: 5px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-shadow: 0 0 8px var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 243, 255, 0.2);
+}
+
+.upgrade-buy-btn:hover:not(:disabled) {
+  background: var(--neon-cyan);
+  color: #060912;
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.8);
+  text-shadow: none;
+}
+
+.upgrade-buy-btn.disabled,
+.upgrade-buy-btn:disabled {
+  opacity: 0.45;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #64748b;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: not-allowed;
+  box-shadow: none;
+  text-shadow: none;
+}
+
+.upgrade-card.maxed {
+  border-color: rgba(0, 255, 136, 0.45);
+}
+
+.upgrade-card.maxed .upgrade-lvl {
+  color: var(--neon-green);
+  border-color: rgba(0, 255, 136, 0.6);
+  text-shadow: 0 0 6px var(--neon-green);
+}
+
+/* ==========================================================================
+   GAME OVER MODAL
+   ========================================================================== */
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(7, 10, 16, 0.92);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  transition: opacity 0.3s ease;
+}
+
+.modal-backdrop.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.modal-content {
+  background: var(--bg-panel);
+  border: 3px solid var(--neon-crimson);
+  border-radius: 10px;
+  padding: 44px 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  box-shadow: 0 0 50px rgba(255, 26, 102, 0.6), 0 0 100px rgba(0, 0, 0, 0.9);
+  text-align: center;
+  max-width: 480px;
+}
+
+.modal-title {
+  font-family: var(--font-cyber);
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--neon-crimson);
+  letter-spacing: 4px;
+  text-shadow: 0 0 25px rgba(255, 26, 102, 0.9);
+}
+
+.modal-body {
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 700;
+  color: #e2f4ff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 1.6;
+}
+
+#modal-final-wave {
+  font-family: var(--font-cyber);
+  font-weight: 900;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.modal-btn {
+  background: rgba(255, 26, 102, 0.2);
+  border: 2px solid var(--neon-crimson);
+  color: #ffffff;
+  font-family: var(--font-cyber);
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  padding: 14px 30px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 0 20px rgba(255, 26, 102, 0.5);
+}
+
+.modal-btn:hover {
+  background: var(--neon-crimson);
+  color: #060912;
+  box-shadow: 0 0 35px rgba(255, 26, 102, 0.9);
+}
+
+</style>
+</head>
+<body>
+  <div id="game-app">
+    <!-- TOP STATUS HUD -->
+    <header id="top-hud">
+      <div class="hud-group">
+        <div id="hud-wave" class="hud-badge">ВОЛНА 01</div>
+        <div id="hud-enemies" class="hud-badge enemies">ВРАГИ: 0</div>
+      </div>
+
+      <!-- 5-SECOND INTERMISSION COUNTDOWN BAR -->
+      <div id="intermission-container" class="hidden">
+        <div id="intermission-text">ПЕРЕРЫВ: 5.0s (ВОЛНА 02)</div>
+        <div class="intermission-bar-bg">
+          <div id="intermission-bar"></div>
+        </div>
+      </div>
+
+      <!-- CREDITS & HEALTH -->
+      <div class="hud-group">
+        <div id="hud-credits" class="hud-credits">100 ◈</div>
+        
+        <div class="hp-container">
+          <div class="hp-bar-bg">
+            <div id="hud-hp-fill"></div>
+          </div>
+          <div id="hud-hp-text">600 / 600 (+1.0/с)</div>
+        </div>
+
+        <button id="btn-speed" class="icon-btn" title="Ускорение времени">1x</button>
+        <button id="btn-audio" class="icon-btn" title="Переключить звук">🔊</button>
+      </div>
+    </header>
+
+    <!-- MAIN VIEWPORT -->
+    <main id="game-viewport">
+      <!-- CANVAS WRAPPER -->
+      <div id="canvas-wrapper">
+        <canvas id="game-canvas"></canvas>
+
+        <!-- TARGET PRIORITY OVERLAY -->
+        <div id="strategy-overlay">
+          <span class="overlay-label">ПРИОРИТЕТ ЦЕЛИ:</span>
+          <div class="strat-buttons">
+            <button id="strat-closest" class="strat-btn active">БЛИЖАЙШИЙ</button>
+            <button id="strat-strongest" class="strat-btn">СИЛЬНЕЙШИЙ</button>
+            <button id="strat-weakest" class="strat-btn">СЛАБЕЙШИЙ</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPGRADE DECK SIDEBAR -->
+      <aside id="sidebar">
+        <div class="sidebar-header">СИСТЕМА УЛУЧШЕНИЙ [14]</div>
+        
+        <div class="tabs-container">
+          <button id="tab-offense" class="tab-btn active">ОРУЖИЕ</button>
+          <button id="tab-defense" class="tab-btn">ЗАЩИТА</button>
+          <button id="tab-utility" class="tab-btn">ЭКОНОМИКА</button>
+        </div>
+
+        <div id="upgrades-list">
+          <!-- Dynamic cards rendered by UIManager -->
+        </div>
+      </aside>
+    </main>
+
+    <!-- GAME OVER MODAL -->
+    <div id="modal-gameover" class="modal-backdrop hidden">
+      <div class="modal-content">
+        <h2 class="modal-title">СИСТЕМА СБИТА</h2>
+        <div class="modal-body">
+          <p>Центральное ядро уничтожено роем.</p>
+          <p>Достигнутый рубеж: <span id="modal-final-wave">ВОЛНА 01</span></p>
+        </div>
+        <button id="btn-restart" class="modal-btn">ПЕРЕЗАПУСТИТЬ СИСТЕМУ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ENTRY MODULE -->
+  <script>
+(function() {
+  "use strict";
+
+  // ==================================================
+  // Source: src/core/EntityManager.js
+  // ==================================================
+/**
+ * EntityManager.js
+ * Manages allocation, lifecycle, and recycling of unique Entity IDs.
+ */
+
+class EntityManager {
+  constructor() {
+    this.nextId = 1;
+    this.freeIds = [];
+    this.activeEntities = new Set();
+  }
+
+  /**
+   * Allocate a new unique Entity ID
+   * @returns {number}
+   */
+  createEntity() {
+    let id;
+    if (this.freeIds.length > 0) {
+      id = this.freeIds.pop();
+    } else {
+      id = this.nextId++;
+    }
+    this.activeEntities.add(id);
+    return id;
+  }
+
+  /**
+   * Mark an Entity ID as destroyed and reclaim it for reuse
+   * @param {number} id
+   */
+  destroyEntity(id) {
+    if (this.activeEntities.has(id)) {
+      this.activeEntities.delete(id);
+      this.freeIds.push(id);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if an entity is alive
+   * @param {number} id
+   * @returns {boolean}
+   */
+  isAlive(id) {
+    return this.activeEntities.has(id);
+  }
+
+  /**
+   * Get all active entity IDs
+   * @returns {Set<number>}
+   */
+  getActiveEntities() {
+    return this.activeEntities;
+  }
+
+  /**
+   * Reset manager state
+   */
+  clear() {
+    this.nextId = 1;
+    this.freeIds = [];
+    this.activeEntities.clear();
+  }
+}
+
+
+  // ==================================================
+  // Source: src/core/EventBus.js
+  // ==================================================
+/**
+ * EventBus.js
+ * Decoupled publish-subscribe event system for cross-system and UI communication.
+ */
+
+class EventBus {
+  constructor() {
+    this.listeners = new Map();
+  }
+
+  /**
+   * Subscribe to an event
+   * @param {string} event
+   * @param {Function} callback
+   * @returns {Function} Unsubscribe function
+   */
+  on(event, callback) {
+    if (!this.listeners.has(event)) {
+      this.listeners.set(event, new Set());
+    }
+    this.listeners.get(event).add(callback);
+
+    return () => this.off(event, callback);
+  }
+
+  /**
+   * Unsubscribe from an event
+   * @param {string} event
+   * @param {Function} callback
+   */
+  off(event, callback) {
+    const set = this.listeners.get(event);
+    if (set) {
+      set.delete(callback);
+      if (set.size === 0) {
+        this.listeners.delete(event);
+      }
+    }
+  }
+
+  /**
+   * Publish an event to all subscribers
+   * @param {string} event
+   * @param {*} data
+   */
+  emit(event, data) {
+    const set = this.listeners.get(event);
+    if (set) {
+      for (const callback of set) {
+        try {
+          callback(data);
+        } catch (err) {
+          console.error(`Error in EventBus listener for event "${event}":`, err);
+        }
+      }
+    }
+  }
+
+  /**
+   * Remove all listeners
+   */
+  clear() {
+    this.listeners.clear();
+  }
+}
+
+
+  // ==================================================
+  // Source: src/core/World.js
+  // ==================================================
+/**
+ * World.js
+ * Central ECS World managing entities, component pools, systems execution, and deferred cleanup.
+ */
+
+class World {
+  constructor() {
+    this.entityManager = new EntityManager();
+    this.eventBus = new EventBus();
+    
+    // Map<ComponentClass, Map<entityId, componentInstance>>
+    this.componentStores = new Map();
+    
+    // Systems in execution order
+    this.systems = [];
+
+    // Entities queued for destruction at the end of the frame
+    this.destructionQueue = new Set();
+
+    // Runtime state
+    this.isPaused = false;
+    this.gameSpeed = 1.0;
+    this.isGameOver = false;
+
+    // Viewport dimensions
+    this.width = 1200;
+    this.height = 800;
+  }
+
+  /**
+   * Helper to resolve component store key
+   * @private
+   */
+  _getStoreKey(ComponentClass) {
+    return ComponentClass;
+  }
+
+  /**
+   * Helper to ensure component store exists
+   * @private
+   */
+  _getStore(ComponentClass) {
+    let store = this.componentStores.get(ComponentClass);
+    if (!store) {
+      store = new Map();
+      this.componentStores.set(ComponentClass, store);
+    }
+    return store;
+  }
+
+  /**
+   * Create a new entity ID
+   * @returns {number}
+   */
+  createEntity() {
+    return this.entityManager.createEntity();
+  }
+
+  /**
+   * Attach a component instance to an entity
+   * @param {number} entityId
+   * @param {Object} componentInstance
+   * @returns {Object} componentInstance
+   */
+  addComponent(entityId, componentInstance) {
+    if (!this.entityManager.isAlive(entityId)) {
+      console.warn(`Cannot add component to dead or non-existent entity ${entityId}`);
+      return componentInstance;
+    }
+    const ComponentClass = componentInstance.constructor;
+    const store = this._getStore(ComponentClass);
+    store.set(entityId, componentInstance);
+    return componentInstance;
+  }
+
+  /**
+   * Retrieve a component instance for an entity
+   * @param {number} entityId
+   * @param {Function} ComponentClass
+   * @returns {Object|null}
+   */
+  getComponent(entityId, ComponentClass) {
+    const store = this.componentStores.get(ComponentClass);
+    if (!store) return null;
+    return store.get(entityId) || null;
+  }
+
+  /**
+   * Check if an entity has a specific component
+   * @param {number} entityId
+   * @param {Function} ComponentClass
+   * @returns {boolean}
+   */
+  hasComponent(entityId, ComponentClass) {
+    const store = this.componentStores.get(ComponentClass);
+    if (!store) return false;
+    return store.has(entityId);
+  }
+
+  /**
+   * Remove a component from an entity
+   * @param {number} entityId
+   * @param {Function} ComponentClass
+   */
+  removeComponent(entityId, ComponentClass) {
+    const store = this.componentStores.get(ComponentClass);
+    if (store) {
+      store.delete(entityId);
+    }
+  }
+
+  /**
+   * Query all entities matching ALL specified component classes
+   * @param  {...Function} componentClasses
+   * @returns {number[]} Array of entity IDs
+   */
+  getEntitiesWith(...componentClasses) {
+    if (componentClasses.length === 0) {
+      return Array.from(this.entityManager.getActiveEntities());
+    }
+
+    // Find the smallest component pool for optimal iteration
+    let smallestStore = null;
+    let smallestSize = Infinity;
+
+    for (const CompClass of componentClasses) {
+      const store = this.componentStores.get(CompClass);
+      if (!store || store.size === 0) {
+        return []; // If any component pool is empty, intersection is empty
+      }
+      if (store.size < smallestSize) {
+        smallestSize = store.size;
+        smallestStore = store;
+      }
+    }
+
+    const matches = [];
+    for (const entityId of smallestStore.keys()) {
+      // Skip queued for destruction
+      if (this.destructionQueue.has(entityId)) continue;
+
+      let hasAll = true;
+      for (const CompClass of componentClasses) {
+        const store = this.componentStores.get(CompClass);
+        if (!store || !store.has(entityId)) {
+          hasAll = false;
+          break;
+        }
+      }
+      if (hasAll) {
+        matches.push(entityId);
+      }
+    }
+
+    return matches;
+  }
+
+  /**
+   * Queue an entity for deferred removal at the end of the current update tick
+   * @param {number} entityId
+   */
+  destroyEntity(entityId) {
+    if (this.entityManager.isAlive(entityId)) {
+      this.destructionQueue.add(entityId);
+    }
+  }
+
+  /**
+   * Process deferred entity destructions and clean component pools
+   * @private
+   */
+  _flushDestructionQueue() {
+    if (this.destructionQueue.size === 0) return;
+
+    for (const entityId of this.destructionQueue) {
+      // Remove all components for this entity
+      for (const store of this.componentStores.values()) {
+        store.delete(entityId);
+      }
+      // Reclaim entity ID
+      this.entityManager.destroyEntity(entityId);
+    }
+    this.destructionQueue.clear();
+  }
+
+  /**
+   * Register a system to run on each frame
+   * @param {Object} system
+   */
+  registerSystem(system) {
+    if (typeof system.init === 'function') {
+      system.init(this);
+    }
+    this.systems.push(system);
+  }
+
+  /**
+   * Update all systems by deltaTime
+   * @param {number} deltaTime In seconds
+   */
+  update(deltaTime) {
+    if (this.isPaused) return;
+
+    const scaledDt = deltaTime * this.gameSpeed;
+
+    for (const system of this.systems) {
+      system.update(this, scaledDt);
+    }
+
+    // Clean up dead entities safely between ticks
+    this._flushDestructionQueue();
+  }
+
+  /**
+   * Reset world and all entities
+   */
+  clear() {
+    this.destructionQueue.clear();
+    for (const store of this.componentStores.values()) {
+      store.clear();
+    }
+    this.entityManager.clear();
+    this.isGameOver = false;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/config/GameConfig.js
+  // ==================================================
+/**
+ * GameConfig.js
+ * Central configuration for constants, enemy archetypes, visual styles, and upgrades.
+ */
+
+const GameConfig = {
+  // Canvas and coordinate settings
+  canvas: {
+    width: 1200,
+    height: 800,
+    backgroundColor: '#0a0b10',
+    gridColor: 'rgba(0, 243, 255, 0.05)',
+    gridSize: 40
+  },
+
+  // Style palette (Geometric Neon Cyberpunk)
+  colors: {
+    background: '#0a0b10',
+    tower: '#00f3ff',
+    towerCore: '#ffffff',
+    towerGlow: '#00f3ff',
+    rangeRing: 'rgba(0, 243, 255, 0.12)',
+    rangeRingBorder: 'rgba(0, 243, 255, 0.35)',
+    
+    // Enemy colors
+    scout: '#ffe600',       // Yellow
+    fighter: '#ff0055',     // Crimson / Red
+    tank: '#9d00ff',        // Purple
+    sniper: '#ff7700',      // Orange
+
+    // Combat & UI
+    projectile: '#00f3ff',
+    enemyProjectile: '#ff7700',
+    critText: '#ffe600',
+    normalDamageText: '#ffffff',
+    towerDamageText: '#ff0055',
+    healthGreen: '#00ff66',
+    healthRed: '#ff2255'
+  },
+
+  // Tower default base parameters
+  tower: {
+    radius: 26,
+    colliderRadius: 26,
+    baseHealth: 600,
+    baseRegen: 1.0,
+    baseDamage: 25,
+    baseAttackSpeed: 1.6, // attacks per second
+    baseRange: 130,       // Initial attack zone 2x smaller (130px)
+    baseCritChance: 0.08,
+    baseCritMultiplier: 1.6,
+    baseMultishotCount: 1,
+    baseMultishotChance: 0.0,
+    basePercentArmor: 0.0,
+    baseFlatArmor: 0,
+    baseDistanceDamageCoeff: 0.001, // +0.1% damage per unit traveled
+    startCredits: 100
+  },
+
+  // Enemy archetypes
+  enemies: {
+    scout: {
+      type: 'scout',
+      sides: 3,             // Triangle
+      radius: 12,
+      baseSpeed: 105,
+      mass: 1.0,
+      baseHp: 40,
+      baseDamage: 12,
+      baseReward: 10,
+      color: '#ffe600',
+      glowColor: '#ffe600',
+      glowBlur: 10
+    },
+    fighter: {
+      type: 'fighter',
+      sides: 4,             // Dart / Sharp diamond
+      radius: 11,
+      baseSpeed: 155,       // Fast
+      mass: 0.7,            // Light mass, pushes away easily
+      baseHp: 32,
+      baseDamage: 18,
+      baseReward: 14,
+      color: '#ff0055',
+      glowColor: '#ff0055',
+      glowBlur: 12
+    },
+    tank: {
+      type: 'tank',
+      sides: 6,             // Hexagon
+      radius: 22,
+      baseSpeed: 52,        // Slow
+      mass: 8.0,            // Heavy mass, almost immovable
+      baseHp: 220,
+      baseDamage: 45,
+      baseReward: 35,
+      color: '#9d00ff',
+      glowColor: '#9d00ff',
+      glowBlur: 14
+    },
+    sniper: {
+      type: 'sniper',
+      sides: 4,             // Diamond
+      radius: 14,
+      baseSpeed: 80,
+      mass: 1.5,
+      baseHp: 75,
+      baseDamage: 22,
+      baseReward: 25,
+      stopDistance: 240,    // Scaled for tighter base perimeter
+      shootInterval: 2.8,   // Shoots every 2.8s
+      projectileSpeed: 220,
+      color: '#ff7700',
+      glowColor: '#ff7700',
+      glowBlur: 12
+    }
+  },
+
+  // Waves & pacing rules
+  waves: {
+    intermissionDuration: 5.0, // 5 seconds intermission phase
+    speedJitterMin: -0.07,     // -7%
+    speedJitterMax: 0.07,      // +7%
+    hpScaleFactor: 1.10,       // HP = BaseHP * (1.10 ^ (Wave - 1))
+    damageScaleFactor: 1.07,   // Damage = BaseDmg * (1.07 ^ (Wave - 1))
+    waveBaseReward: 50,
+    waveRewardGrowth: 25
+  },
+
+  // Physics separation constants
+  physics: {
+    separationPushStrength: 0.65
+  },
+
+  // Projectile settings
+  projectile: {
+    speed: 550,
+    radius: 4,
+    maxLifetime: 2.5
+  },
+
+  // 12 Upgrades configuration
+  upgrades: {
+    // OFFENSE
+    damage: {
+      id: 'damage',
+      category: 'offense',
+      name: 'Урон оружия',
+      icon: '⚡',
+      baseCost: 25,
+      costMultiplier: 1.25,
+      valuePerLevel: 6,
+      format: (val) => `${val.toFixed(0)} DMG`
+    },
+    attackSpeed: {
+      id: 'attackSpeed',
+      category: 'offense',
+      name: 'Скорость атаки',
+      icon: '🔄',
+      baseCost: 35,
+      costMultiplier: 1.28,
+      valuePerLevel: 0.15,
+      format: (val) => `${val.toFixed(2)} /сек`
+    },
+    range: {
+      id: 'range',
+      category: 'offense',
+      name: 'Расширение зоны атаки',
+      icon: '📡',
+      baseCost: 30,
+      costMultiplier: 1.25,
+      valuePerLevel: 8, // +8px radius per level (reduced from 20px)
+      maxLevel: 20, // max 290px (prevents zone from spilling off-screen)
+      format: (val) => `${val.toFixed(0)} px`
+    },
+    distanceDamage: {
+      id: 'distanceDamage',
+      category: 'offense',
+      name: 'Урон за дальность',
+      icon: '🎯',
+      baseCost: 35,
+      costMultiplier: 1.28,
+      valuePerLevel: 0.0005, // +0.0005 per unit per level
+      format: (val) => `+${(val * 100).toFixed(2)}%/100ед.`
+    },
+    critChance: {
+      id: 'critChance',
+      category: 'offense',
+      name: 'Шанс крита',
+      icon: '🎯',
+      baseCost: 40,
+      costMultiplier: 1.32,
+      valuePerLevel: 0.02, // +2%
+      maxLevel: 36, // up to 80%
+      format: (val) => `${(val * 100).toFixed(0)}%`
+    },
+    critDamage: {
+      id: 'critDamage',
+      category: 'offense',
+      name: 'Крит. урон',
+      icon: '💥',
+      baseCost: 45,
+      costMultiplier: 1.30,
+      valuePerLevel: 0.25, // +25%
+      format: (val) => `${val.toFixed(2)}x`
+    },
+    multishotChance: {
+      id: 'multishotChance',
+      category: 'offense',
+      name: 'Шанс мультивыстрела',
+      icon: '✨',
+      baseCost: 45,
+      costMultiplier: 1.30,
+      valuePerLevel: 0.015, // +1.5% per level (reduced from 5%)
+      maxLevel: 25, // up to 37.5%
+      format: (val) => `${(val * 100).toFixed(1)}%`
+    },
+    multishotTargets: {
+      id: 'multishotTargets',
+      category: 'offense',
+      name: 'Цели мультивыстрела',
+      icon: '🔱',
+      baseCost: 80,
+      costMultiplier: 1.70,
+      valuePerLevel: 1, // +1 projectile
+      maxLevel: 5,
+      format: (val) => `+${val} цели`
+    },
+
+    // DEFENSE
+    maxHealth: {
+      id: 'maxHealth',
+      category: 'defense',
+      name: 'Макс. прочность',
+      icon: '🛡️',
+      baseCost: 30,
+      costMultiplier: 1.25,
+      valuePerLevel: 80,
+      format: (val) => `${val.toFixed(0)} HP`
+    },
+    armorPercent: {
+      id: 'armorPercent',
+      category: 'defense',
+      name: 'Броня %',
+      icon: '🔷',
+      baseCost: 40,
+      costMultiplier: 1.32,
+      valuePerLevel: 0.03, // +3%
+      maxLevel: 28, // soft cap around 85%
+      format: (val) => `${Math.min(85, val * 100).toFixed(0)}%`
+    },
+    flatArmor: {
+      id: 'flatArmor',
+      category: 'defense',
+      name: 'Поглощение урона',
+      icon: '🧱',
+      baseCost: 35,
+      costMultiplier: 1.28,
+      valuePerLevel: 3, // -3 damage flat
+      format: (val) => `-${val.toFixed(0)} DMG`
+    },
+    healthRegen: {
+      id: 'healthRegen',
+      category: 'defense',
+      name: 'Регенерация HP',
+      icon: '💚',
+      baseCost: 40,
+      costMultiplier: 1.30,
+      valuePerLevel: 1.5, // +1.5 HP/sec
+      format: (val) => `+${val.toFixed(1)}/сек`
+    },
+
+    // UTILITY / ECONOMY
+    killCashBonus: {
+      id: 'killCashBonus',
+      category: 'utility',
+      name: 'Бонус за убийства',
+      icon: '🪙',
+      baseCost: 40,
+      costMultiplier: 1.28,
+      valuePerLevel: 0.12, // +12% kill multiplier
+      format: (val) => `+${((val - 1.0) * 100).toFixed(0)}%`
+    },
+    waveCashBonus: {
+      id: 'waveCashBonus',
+      category: 'utility',
+      name: 'Бонус за волну',
+      icon: '💎',
+      baseCost: 50,
+      costMultiplier: 1.30,
+      valuePerLevel: 0.15, // +15% wave multiplier
+      format: (val) => `+${((val - 1.0) * 100).toFixed(0)}%`
+    }
+  }
+};
+
+
+  // ==================================================
+  // Source: src/components/TransformComponent.js
+  // ==================================================
+/**
+ * TransformComponent.js
+ * Pure DTO: position and orientation in 2D space.
+ */
+
+class TransformComponent {
+  constructor(x = 0, y = 0, rotation = 0) {
+    this.x = x;
+    this.y = y;
+    this.rotation = rotation;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/VelocityComponent.js
+  // ==================================================
+/**
+ * VelocityComponent.js
+ * Pure DTO: velocity vectors and speed metrics.
+ */
+
+class VelocityComponent {
+  constructor(vx = 0, vy = 0, baseSpeed = 100, currentSpeed = 100) {
+    this.vx = vx;
+    this.vy = vy;
+    this.baseSpeed = baseSpeed;
+    this.currentSpeed = currentSpeed;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/CircleColliderComponent.js
+  // ==================================================
+/**
+ * CircleColliderComponent.js
+ * Pure DTO: circle collision boundary, mass, and static flag.
+ */
+
+class CircleColliderComponent {
+  constructor(radius = 15, mass = 1.0, isStatic = false) {
+    this.radius = radius;
+    this.mass = mass;
+    this.isStatic = isStatic;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/HealthComponent.js
+  // ==================================================
+/**
+ * HealthComponent.js
+ * Pure DTO: hit points and passive regeneration rate.
+ */
+
+class HealthComponent {
+  constructor(current = 100, max = 100, regenRate = 0) {
+    this.current = current;
+    this.max = max;
+    this.regenRate = regenRate;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/ArmorComponent.js
+  // ==================================================
+/**
+ * ArmorComponent.js
+ * Pure DTO: defensive mitigation stats (percent and flat reduction).
+ */
+
+class ArmorComponent {
+  constructor(percentReduction = 0, flatReduction = 0) {
+    this.percentReduction = percentReduction;
+    this.flatReduction = flatReduction;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/AttackComponent.js
+  // ==================================================
+/**
+ * AttackComponent.js
+ * Pure DTO: offensive capabilities and weapon cooldown.
+ */
+
+class AttackComponent {
+  constructor(
+    damage = 25,
+    attackSpeed = 1.6,
+    range = 260,
+    cooldown = 0,
+    critChance = 0.08,
+    critMultiplier = 1.6,
+    multishotCount = 1,
+    multishotChance = 0.0,
+    distanceBonus = 0.001
+  ) {
+    this.damage = damage;
+    this.attackSpeed = attackSpeed;
+    this.range = range;
+    this.cooldown = cooldown;
+    this.critChance = critChance;
+    this.critMultiplier = critMultiplier;
+    this.multishotCount = multishotCount;
+    this.multishotChance = multishotChance;
+    this.distanceBonus = distanceBonus;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/TargetComponent.js
+  // ==================================================
+/**
+ * TargetComponent.js
+ * Pure DTO: target tracking and prioritization heuristic.
+ */
+
+class TargetComponent {
+  constructor(targetEntityId = null, strategy = 'closest') {
+    this.targetEntityId = targetEntityId;
+    this.strategy = strategy; // 'closest' | 'strongest' | 'weakest'
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/RenderComponent.js
+  // ==================================================
+/**
+ * RenderComponent.js
+ * Pure DTO: geometric rendering attributes and neon bloom effects.
+ */
+
+class RenderComponent {
+  constructor(
+    shape = 'polygon',
+    sides = 4,
+    radius = 15,
+    color = '#00f3ff',
+    glowColor = '#00f3ff',
+    glowBlur = 10
+  ) {
+    this.shape = shape; // 'circle' | 'polygon' | 'projectile' | 'tower'
+    this.sides = sides;
+    this.radius = radius;
+    this.color = color;
+    this.glowColor = glowColor;
+    this.glowBlur = glowBlur;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/TowerComponent.js
+  // ==================================================
+/**
+ * TowerComponent.js
+ * Pure DTO: tag component identifying the central player tower.
+ */
+
+class TowerComponent {
+  constructor() {
+    this.isTower = true;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/EnemyComponent.js
+  // ==================================================
+/**
+ * EnemyComponent.js
+ * Pure DTO: enemy metadata, type archetype, reward value, and sniper state.
+ */
+
+class EnemyComponent {
+  constructor(
+    type = 'scout',
+    baseReward = 10,
+    isSniper = false,
+    shootCooldown = 0,
+    shootInterval = 2.8,
+    stopDistance = 240,
+    rotationSpeed = 0,
+    damage = 15
+  ) {
+    this.type = type; // 'scout' | 'fighter' | 'tank' | 'sniper'
+    this.baseReward = baseReward;
+    this.isSniper = isSniper;
+    this.shootCooldown = shootCooldown;
+    this.shootInterval = shootInterval;
+    this.stopDistance = stopDistance;
+    this.rotationSpeed = rotationSpeed;
+    this.damage = damage;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/ProjectileComponent.js
+  // ==================================================
+/**
+ * ProjectileComponent.js
+ * Pure DTO: projectile trajectory state, lifetime counter, and damage payload.
+ */
+
+class ProjectileComponent {
+  constructor(
+    sourceEntityId = null,
+    targetEntityId = null,
+    lifetime = 0,
+    maxLifetime = 2.5,
+    damage = 25,
+    isCrit = false,
+    isEnemy = false,
+    originX = 0,
+    originY = 0,
+    distanceBonus = 0
+  ) {
+    this.sourceEntityId = sourceEntityId;
+    this.targetEntityId = targetEntityId;
+    this.lifetime = lifetime;
+    this.maxLifetime = maxLifetime;
+    this.damage = damage;
+    this.isCrit = isCrit;
+    this.isEnemy = isEnemy;
+    this.originX = originX;
+    this.originY = originY;
+    this.distanceBonus = distanceBonus;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/components/EconomyComponent.js
+  // ==================================================
+/**
+ * EconomyComponent.js
+ * Pure DTO: player credit balance and economic multipliers.
+ */
+
+class EconomyComponent {
+  constructor(credits = 100, killMultiplier = 1.0, waveMultiplier = 1.0) {
+    this.credits = credits;
+    this.killMultiplier = killMultiplier;
+    this.waveMultiplier = waveMultiplier;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/MovementSystem.js
+  // ==================================================
+/**
+ * MovementSystem.js
+ * Updates entity positions and orientations strictly based on velocity vectors.
+ */
+
+class MovementSystem {
+  init(world) {
+    // When an entity dies, immediately disconnect homing on all projectiles targeting it
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      const targetedProjectiles = world.getEntitiesWith(ProjectileComponent);
+      for (const id of targetedProjectiles) {
+        const proj = world.getComponent(id, ProjectileComponent);
+        if (proj && proj.targetEntityId === event.entityId) {
+          proj.targetEntityId = null;
+        }
+      }
+    });
+  }
+
+  update(world, deltaTime) {
+    // 1. Locate tower position to steer regular marching enemies
+    const towerEntities = world.getEntitiesWith(TowerComponent, TransformComponent);
+    let towerX = world.width / 2;
+    let towerY = world.height / 2;
+
+    if (towerEntities.length > 0) {
+      const towerTrans = world.getComponent(towerEntities[0], TransformComponent);
+      towerX = towerTrans.x;
+      towerY = towerTrans.y;
+    }
+
+    // 2. Steer marching enemies towards tower
+    const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, VelocityComponent);
+    for (const id of enemyEntities) {
+      const transform = world.getComponent(id, TransformComponent);
+      const velocity = world.getComponent(id, VelocityComponent);
+      const enemyComp = world.getComponent(id, EnemyComponent);
+
+      // Check if sniper is stopped at perimeter (handled by SniperAISystem)
+      if (enemyComp.isSniper && enemyComp.isStopped) {
+        velocity.vx = 0;
+        velocity.vy = 0;
+        continue;
+      }
+
+      const dx = towerX - transform.x;
+      const dy = towerY - transform.y;
+      const dist = Math.hypot(dx, dy);
+
+      if (dist > 1) {
+        velocity.vx = (dx / dist) * velocity.currentSpeed;
+        velocity.vy = (dy / dist) * velocity.currentSpeed;
+
+        if (enemyComp.type === 'scout' || enemyComp.type === 'tank') {
+          // Scout and Tank: smoothly and randomly rotate while moving towards the tower
+          transform.rotation += (enemyComp.rotationSpeed || 1.0) * deltaTime;
+        } else {
+          // Fighter and Sniper: strictly keep facing forward along trajectory, NO spin!
+          transform.rotation = Math.atan2(dy, dx);
+        }
+      } else {
+        velocity.vx = 0;
+        velocity.vy = 0;
+      }
+    }
+
+    // 3. Steer homing player projectiles toward their target
+    const targetedProjectiles = world.getEntitiesWith(ProjectileComponent, TransformComponent, VelocityComponent);
+    for (const id of targetedProjectiles) {
+      const proj = world.getComponent(id, ProjectileComponent);
+      if (proj.targetEntityId && !proj.isEnemy) {
+        const isTargetAlive = world.entityManager.isAlive(proj.targetEntityId) &&
+                              !world.destructionQueue.has(proj.targetEntityId);
+        const targetHealth = world.getComponent(proj.targetEntityId, HealthComponent);
+        const isEnemy = world.hasComponent(proj.targetEntityId, EnemyComponent);
+
+        if (!isTargetAlive || !targetHealth || targetHealth.current <= 0 || !isEnemy) {
+          // Target died or was destroyed: disconnect homing permanently!
+          // Projectile keeps its current velocity vector and flies straight forward.
+          proj.targetEntityId = null;
+        } else {
+          const targetTrans = world.getComponent(proj.targetEntityId, TransformComponent);
+          if (targetTrans) {
+            const trans = world.getComponent(id, TransformComponent);
+            const velocity = world.getComponent(id, VelocityComponent);
+            const dx = targetTrans.x - trans.x;
+            const dy = targetTrans.y - trans.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 1) {
+              velocity.vx = (dx / dist) * velocity.currentSpeed;
+              velocity.vy = (dy / dist) * velocity.currentSpeed;
+              trans.rotation = Math.atan2(dy, dx);
+            }
+          }
+        }
+      }
+    }
+
+    // 4. Integrate velocity into transform for all moving entities
+    const movingEntities = world.getEntitiesWith(TransformComponent, VelocityComponent);
+    for (const id of movingEntities) {
+      const transform = world.getComponent(id, TransformComponent);
+      const velocity = world.getComponent(id, VelocityComponent);
+
+      transform.x += velocity.vx * deltaTime;
+      transform.y += velocity.vy * deltaTime;
+    }
+
+    // 5. Clean up projectiles flying off-screen (bounds + 80px margin)
+    const allProjectiles = world.getEntitiesWith(ProjectileComponent, TransformComponent);
+    for (const id of allProjectiles) {
+      const trans = world.getComponent(id, TransformComponent);
+      if (trans.x < -80 || trans.x > world.width + 80 || trans.y < -80 || trans.y > world.height + 80) {
+        world.destroyEntity(id);
+      }
+    }
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/PhysicsSeparationSystem.js
+  // ==================================================
+/**
+ * PhysicsSeparationSystem.js
+ * Prevents swarm clustering by applying soft-elastic mass-weighted repulsion
+ * between overlapping circle colliders.
+ */
+
+class PhysicsSeparationSystem {
+  update(world, deltaTime) {
+    const pushStrength = GameConfig.physics.separationPushStrength || 0.65;
+    const dynamicColliders = world.getEntitiesWith(TransformComponent, CircleColliderComponent)
+      .filter(id => {
+        const col = world.getComponent(id, CircleColliderComponent);
+        return !col.isStatic;
+      });
+
+    const count = dynamicColliders.length;
+    if (count < 2) return;
+
+    // Pairwise collision resolution with mass distribution
+    for (let i = 0; i < count; i++) {
+      const idA = dynamicColliders[i];
+      const transA = world.getComponent(idA, TransformComponent);
+      const colA = world.getComponent(idA, CircleColliderComponent);
+
+      for (let j = i + 1; j < count; j++) {
+        const idB = dynamicColliders[j];
+        const transB = world.getComponent(idB, TransformComponent);
+        const colB = world.getComponent(idB, CircleColliderComponent);
+
+        const dx = transB.x - transA.x;
+        const dy = transB.y - transA.y;
+        const dist = Math.hypot(dx, dy);
+        const minDist = colA.radius + colB.radius;
+
+        if (dist < minDist) {
+          // If perfectly overlapping, create a slight random divergence
+          const safeDist = dist > 0.0001 ? dist : 0.0001;
+          const nx = dist > 0.0001 ? dx / safeDist : (Math.random() - 0.5);
+          const ny = dist > 0.0001 ? dy / safeDist : (Math.random() - 0.5);
+
+          const overlap = minDist - safeDist;
+          const totalMass = (colA.mass || 1) + (colB.mass || 1);
+
+          // Inverse mass weighting: heavier body moves less, lighter body moves more
+          const weightA = (colB.mass || 1) / totalMass;
+          const weightB = (colA.mass || 1) / totalMass;
+
+          const shift = overlap * pushStrength;
+
+          transA.x -= nx * shift * weightA;
+          transA.y -= ny * shift * weightA;
+
+          transB.x += nx * shift * weightB;
+          transB.y += ny * shift * weightB;
+        }
+      }
+    }
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/TargetingSystem.js
+  // ==================================================
+/**
+ * TargetingSystem.js
+ * Scans for enemies within tower range and assigns targets based on strategy.
+ */
+
+class TargetingSystem {
+  init(world) {
+    // Clear targeted entity on death
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      const towers = world.getEntitiesWith(TowerComponent, TargetComponent);
+      for (const tId of towers) {
+        const targetComp = world.getComponent(tId, TargetComponent);
+        if (targetComp && targetComp.targetEntityId === event.entityId) {
+          targetComp.targetEntityId = null;
+        }
+      }
+    });
+  }
+
+  update(world, deltaTime) {
+    const towers = world.getEntitiesWith(TowerComponent, AttackComponent, TargetComponent, TransformComponent);
+    if (towers.length === 0) return;
+
+    const towerId = towers[0];
+    const towerTrans = world.getComponent(towerId, TransformComponent);
+    const attack = world.getComponent(towerId, AttackComponent);
+    const targetComp = world.getComponent(towerId, TargetComponent);
+
+    // 1. Calculate in-flight damage targeted at each enemy by active player projectiles
+    const inFlightDamage = new Map();
+    const projEntities = world.getEntitiesWith(ProjectileComponent);
+    for (const pId of projEntities) {
+      const proj = world.getComponent(pId, ProjectileComponent);
+      if (proj && !proj.isEnemy && proj.targetEntityId) {
+        inFlightDamage.set(proj.targetEntityId, (inFlightDamage.get(proj.targetEntityId) || 0) + (proj.damage || 0));
+      }
+    }
+
+    // 2. Get all alive enemies strictly within attack range
+    const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
+    const candidates = [];
+
+    for (const enemyId of enemyEntities) {
+      if (world.destructionQueue.has(enemyId)) continue;
+      const enemyTrans = world.getComponent(enemyId, TransformComponent);
+      const enemyHealth = world.getComponent(enemyId, HealthComponent);
+
+      if (!enemyHealth || enemyHealth.current <= 0 || !enemyTrans) continue;
+
+      const dist = Math.hypot(enemyTrans.x - towerTrans.x, enemyTrans.y - towerTrans.y);
+      if (dist <= attack.range) {
+        const inFlight = inFlightDamage.get(enemyId) || 0;
+        candidates.push({
+          id: enemyId,
+          dist,
+          health: enemyHealth.current,
+          effectiveHp: enemyHealth.current - inFlight,
+          x: enemyTrans.x,
+          y: enemyTrans.y
+        });
+      }
+    }
+
+    if (candidates.length === 0) {
+      targetComp.targetEntityId = null;
+      return;
+    }
+
+    // 3. Predictive targeting: prioritize enemies that still need damage (effectiveHp > 0)
+    const needyCandidates = candidates.filter(c => c.effectiveHp > 0);
+    const pool = needyCandidates.length > 0 ? needyCandidates : candidates;
+
+    // 4. Sort pool according to active strategy
+    const strategy = targetComp.strategy || 'closest';
+    if (strategy === 'closest') {
+      pool.sort((a, b) => a.dist - b.dist);
+    } else if (strategy === 'strongest') {
+      pool.sort((a, b) => b.health - a.health);
+    } else if (strategy === 'weakest') {
+      pool.sort((a, b) => a.health - b.health);
+    }
+
+    const chosen = pool[0];
+    targetComp.targetEntityId = chosen.id;
+
+    // Rotate tower gun towards target
+    const angle = Math.atan2(chosen.y - towerTrans.y, chosen.x - towerTrans.x);
+    towerTrans.rotation = angle;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/SniperAISystem.js
+  // ==================================================
+/**
+ * SniperAISystem.js
+ * Controls long-range sniper enemies: halts them at the tower attack perimeter
+ * and handles their ranged firing loop against the tower.
+ */
+
+class SniperAISystem {
+  update(world, deltaTime) {
+    const towers = world.getEntitiesWith(TowerComponent, TransformComponent, AttackComponent);
+    if (towers.length === 0) return;
+
+    const towerId = towers[0];
+    const towerTrans = world.getComponent(towerId, TransformComponent);
+    const towerAttack = world.getComponent(towerId, AttackComponent);
+
+    const snipers = world.getEntitiesWith(EnemyComponent, TransformComponent, VelocityComponent)
+      .filter(id => world.getComponent(id, EnemyComponent).isSniper);
+
+    // Dynamically calculate stop distance tied to tower attack range (90% of range, max 240px)
+    // Ensures snipers always stop within player attack zone regardless of upgrade path
+    const currentRange = towerAttack ? towerAttack.range : GameConfig.tower.baseRange;
+    const maxStopDist = GameConfig.enemies.sniper.stopDistance || 240;
+    const stopDistance = Math.min(maxStopDist, Math.floor(currentRange * 0.90));
+
+    for (const sniperId of snipers) {
+      const enemy = world.getComponent(sniperId, EnemyComponent);
+      const sniperTrans = world.getComponent(sniperId, TransformComponent);
+      const velocity = world.getComponent(sniperId, VelocityComponent);
+
+      const dx = towerTrans.x - sniperTrans.x;
+      const dy = towerTrans.y - sniperTrans.y;
+      const dist = Math.hypot(dx, dy);
+
+      // Check perimeter threshold
+      if (dist <= stopDistance) {
+        enemy.isStopped = true;
+        velocity.vx = 0;
+        velocity.vy = 0;
+
+        // Face towards the tower
+        sniperTrans.rotation = Math.atan2(dy, dx);
+
+        // Firing cycle
+        if (enemy.shootCooldown > 0) {
+          enemy.shootCooldown -= deltaTime;
+        }
+
+        if (enemy.shootCooldown <= 0) {
+          enemy.shootCooldown = enemy.shootInterval || 2.8;
+          this._fireSniperProjectile(world, sniperId, sniperTrans, towerId, towerTrans, enemy.damage);
+        }
+      } else {
+        // Resume approach if pushed away or if tower range changed
+        enemy.isStopped = false;
+      }
+    }
+  }
+
+  _fireSniperProjectile(world, sniperId, sniperTrans, towerId, towerTrans, scaledDamage) {
+    const projId = world.createEntity();
+    const dx = towerTrans.x - sniperTrans.x;
+    const dy = towerTrans.y - sniperTrans.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = GameConfig.enemies.sniper.projectileSpeed || 220;
+
+    const vx = (dx / dist) * speed;
+    const vy = (dy / dist) * speed;
+    const angle = Math.atan2(dy, dx);
+
+    const damage = scaledDamage || GameConfig.enemies.sniper.baseDamage || 22;
+
+    world.addComponent(projId, new TransformComponent(sniperTrans.x, sniperTrans.y, angle));
+    world.addComponent(projId, new VelocityComponent(vx, vy, speed, speed));
+    world.addComponent(projId, new ProjectileComponent(
+      sniperId,
+      towerId,
+      0,
+      4.0, // maxLifetime
+      damage,
+      false, // isCrit
+      true   // isEnemy = true
+    ));
+    world.addComponent(projId, new CircleColliderComponent(5, 0.1, false));
+    world.addComponent(projId, new RenderComponent(
+      'projectile',
+      0,
+      5,
+      GameConfig.colors.enemyProjectile,
+      GameConfig.colors.enemyProjectile,
+      12
+    ));
+
+    world.eventBus.emit('ENEMY_SNIPER_SHOT', {
+      sourceId: sniperId,
+      x: sniperTrans.x,
+      y: sniperTrans.y
+    });
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/WeaponSystem.js
+  // ==================================================
+/**
+ * WeaponSystem.js
+ * Manages attack timers, calculates critical strikes and multishot spreads,
+ * and instantiates projectile entities.
+ */
+
+class WeaponSystem {
+  update(world, deltaTime) {
+    const towers = world.getEntitiesWith(TowerComponent, AttackComponent, TargetComponent, TransformComponent);
+    if (towers.length === 0) return;
+
+    const towerId = towers[0];
+    const attack = world.getComponent(towerId, AttackComponent);
+    const targetComp = world.getComponent(towerId, TargetComponent);
+    const towerTrans = world.getComponent(towerId, TransformComponent);
+
+    // Decrement attack cooldown
+    if (attack.cooldown > 0) {
+      attack.cooldown -= deltaTime;
+    }
+
+    if (attack.cooldown > 0) {
+      return;
+    }
+
+    // 1. Calculate in-flight damage targeted at each enemy by player projectiles
+    const inFlightDamage = new Map();
+    const projEntities = world.getEntitiesWith(ProjectileComponent);
+    for (const pId of projEntities) {
+      const proj = world.getComponent(pId, ProjectileComponent);
+      if (proj && !proj.isEnemy && proj.targetEntityId) {
+        inFlightDamage.set(proj.targetEntityId, (inFlightDamage.get(proj.targetEntityId) || 0) + (proj.damage || 0));
+      }
+    }
+
+    // 2. Scan for all living enemies strictly within attack range
+    const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
+    const enemiesInRange = [];
+
+    for (const enemyId of enemyEntities) {
+      if (world.destructionQueue.has(enemyId)) continue;
+      const eHealth = world.getComponent(enemyId, HealthComponent);
+      const eTrans = world.getComponent(enemyId, TransformComponent);
+      if (!eHealth || eHealth.current <= 0 || !eTrans) continue;
+
+      const dist = Math.hypot(eTrans.x - towerTrans.x, eTrans.y - towerTrans.y);
+      if (dist <= attack.range) {
+        const inFlight = inFlightDamage.get(enemyId) || 0;
+        enemiesInRange.push({
+          id: enemyId,
+          trans: eTrans,
+          health: eHealth.current,
+          effectiveHp: eHealth.current - inFlight,
+          dist
+        });
+      }
+    }
+
+    if (enemiesInRange.length === 0) {
+      targetComp.targetEntityId = null;
+      return;
+    }
+
+    // 3. Predictive filtering: prioritize enemies that need damage
+    const needyEnemies = enemiesInRange.filter(e => e.effectiveHp > 0);
+    if (needyEnemies.length === 0) {
+      // All enemies in range are already slated to die from incoming bullets!
+      // Hold fire so we don't waste shots or send stray bullets into the void.
+      return;
+    }
+
+    // Sort needy enemies according to targeting strategy
+    const strategy = targetComp.strategy || 'closest';
+    if (strategy === 'closest') {
+      needyEnemies.sort((a, b) => a.dist - b.dist);
+    } else if (strategy === 'strongest') {
+      needyEnemies.sort((a, b) => b.health - a.health);
+    } else if (strategy === 'weakest') {
+      needyEnemies.sort((a, b) => a.health - b.health);
+    }
+
+    // Keep primary target consistent if it is in needyEnemies
+    const primaryIndex = needyEnemies.findIndex(e => e.id === targetComp.targetEntityId);
+    if (primaryIndex > 0) {
+      const [primary] = needyEnemies.splice(primaryIndex, 1);
+      needyEnemies.unshift(primary);
+    } else if (primaryIndex === -1 && needyEnemies.length > 0) {
+      targetComp.targetEntityId = needyEnemies[0].id;
+    }
+
+    const primaryTarget = needyEnemies[0];
+
+    // Reset cooldown based on attack speed (attacks per second)
+    attack.cooldown = 1 / Math.max(0.1, attack.attackSpeed);
+
+    // Calculate critical hit
+    const isCrit = Math.random() < attack.critChance;
+    const baseDamage = attack.damage;
+    const finalDamage = isCrit ? Math.round(baseDamage * attack.critMultiplier) : baseDamage;
+
+    // Multishot calculation
+    const triggersMultishot = Math.random() < attack.multishotChance;
+    const maxCapacity = triggersMultishot ? 1 + Math.max(1, attack.multishotCount) : 1;
+
+    // STRICT CONSTRAINT: Fired shots cannot exceed the number of actual targets in range needing damage.
+    // 1 target in range -> 1 shot. 2 targets in range -> at most 2 shots, etc.
+    const shotsToFire = Math.min(maxCapacity, needyEnemies.length);
+
+    // Rotate tower gun towards the primary target
+    towerTrans.rotation = Math.atan2(primaryTarget.trans.y - towerTrans.y, primaryTarget.trans.x - towerTrans.x);
+
+    // Spawn 1 projectile for each distinct target in range
+    for (let i = 0; i < shotsToFire; i++) {
+      const target = needyEnemies[i];
+      this._spawnProjectile(world, towerId, towerTrans, target.id, target.trans, finalDamage, isCrit, attack.distanceBonus);
+    }
+
+    // Notify event bus for sound and feedback
+    world.eventBus.emit('PROJECTILE_FIRED', {
+      sourceId: towerId,
+      targetId: primaryTarget.id,
+      isCrit,
+      shotsCount: shotsToFire
+    });
+  }
+
+  _spawnProjectile(world, towerId, towerTrans, targetId, targetTrans, damage, isCrit, distanceBonus = 0) {
+    const projId = world.createEntity();
+    const dx = targetTrans.x - towerTrans.x;
+    const dy = targetTrans.y - towerTrans.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const speed = GameConfig.projectile.speed;
+
+    const vx = (dx / dist) * speed;
+    const vy = (dy / dist) * speed;
+    const angle = Math.atan2(dy, dx);
+
+    world.addComponent(projId, new TransformComponent(towerTrans.x, towerTrans.y, angle));
+    world.addComponent(projId, new VelocityComponent(vx, vy, speed, speed));
+    world.addComponent(projId, new ProjectileComponent(
+      towerId,
+      targetId,
+      0,
+      GameConfig.projectile.maxLifetime,
+      damage,
+      isCrit,
+      false, // player projectile
+      towerTrans.x,
+      towerTrans.y,
+      distanceBonus
+    ));
+    world.addComponent(projId, new CircleColliderComponent(GameConfig.projectile.radius, 0.1, false));
+    world.addComponent(projId, new RenderComponent(
+      'projectile',
+      0,
+      GameConfig.projectile.radius,
+      isCrit ? GameConfig.colors.critText : GameConfig.colors.projectile,
+      isCrit ? '#ffe600' : '#00f3ff',
+      isCrit ? 16 : 10
+    ));
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/CollisionSystem.js
+  // ==================================================
+/**
+ * CollisionSystem.js
+ * Detects physical overlaps between projectiles, enemies, and the central tower.
+ * Purely detects contacts and dispatches collision events via EventBus.
+ */
+
+class CollisionSystem {
+  update(world, deltaTime) {
+    const towers = world.getEntitiesWith(TowerComponent, TransformComponent, CircleColliderComponent);
+    const hasTower = towers.length > 0;
+    const towerId = hasTower ? towers[0] : null;
+    const towerTrans = hasTower ? world.getComponent(towerId, TransformComponent) : null;
+    const towerCol = hasTower ? world.getComponent(towerId, CircleColliderComponent) : null;
+
+    const projectiles = world.getEntitiesWith(ProjectileComponent, TransformComponent, CircleColliderComponent);
+    const enemies = world.getEntitiesWith(EnemyComponent, TransformComponent, CircleColliderComponent, HealthComponent);
+
+    // 1. Process projectiles
+    for (const projId of projectiles) {
+      const proj = world.getComponent(projId, ProjectileComponent);
+      const projTrans = world.getComponent(projId, TransformComponent);
+      const projCol = world.getComponent(projId, CircleColliderComponent);
+
+      proj.lifetime += deltaTime;
+
+      // Check max lifetime expiration
+      if (proj.lifetime >= proj.maxLifetime) {
+        world.destroyEntity(projId);
+        continue;
+      }
+
+      if (!proj.isEnemy) {
+        // Player projectile hitting enemies
+        let hit = false;
+        for (const enemyId of enemies) {
+          const enemyHealth = world.getComponent(enemyId, HealthComponent);
+          if (enemyHealth.current <= 0) continue;
+
+          const enemyTrans = world.getComponent(enemyId, TransformComponent);
+          const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
+
+          const dist = Math.hypot(enemyTrans.x - projTrans.x, enemyTrans.y - projTrans.y);
+          if (dist <= projCol.radius + enemyCol.radius) {
+            // Distance damage scaling: damage increases slightly per unit traveled from origin
+            const traveledDist = Math.hypot(projTrans.x - (proj.originX || projTrans.x), projTrans.y - (proj.originY || projTrans.y));
+            const distMultiplier = 1 + (traveledDist * (proj.distanceBonus || 0));
+            const finalDamage = Math.max(1, Math.round(proj.damage * distMultiplier));
+
+            world.eventBus.emit('PROJECTILE_HIT', {
+              projectileId: projId,
+              targetId: enemyId,
+              damage: finalDamage,
+              isCrit: proj.isCrit,
+              hitX: projTrans.x,
+              hitY: projTrans.y
+            });
+            world.destroyEntity(projId);
+            hit = true;
+            break;
+          }
+        }
+        if (hit) continue;
+      } else {
+        // Enemy projectile hitting the tower
+        if (hasTower) {
+          const dist = Math.hypot(towerTrans.x - projTrans.x, towerTrans.y - projTrans.y);
+          if (dist <= projCol.radius + towerCol.radius) {
+            world.eventBus.emit('TOWER_HIT', {
+              projectileId: projId,
+              damage: proj.damage,
+              hitX: projTrans.x,
+              hitY: projTrans.y
+            });
+            world.destroyEntity(projId);
+            continue;
+          }
+        }
+      }
+    }
+
+    // 2. Process enemy body contact with tower (kamikaze melee impact)
+    if (hasTower) {
+      for (const enemyId of enemies) {
+        const enemyHealth = world.getComponent(enemyId, HealthComponent);
+        if (enemyHealth.current <= 0) continue;
+
+        const enemyTrans = world.getComponent(enemyId, TransformComponent);
+        const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
+
+        const dist = Math.hypot(towerTrans.x - enemyTrans.x, towerTrans.y - enemyTrans.y);
+        if (dist <= towerCol.radius + enemyCol.radius) {
+          enemyHealth.current = 0;
+          world.eventBus.emit('TOWER_CONTACT', {
+            enemyId,
+            hitX: enemyTrans.x,
+            hitY: enemyTrans.y
+          });
+        }
+      }
+    }
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/DamageSystem.js
+  // ==================================================
+/**
+ * DamageSystem.js
+ * Applies mitigation formulas (flat defense and percent armor capped at 85%),
+ * updates health, executes passive regeneration, and triggers death / game over events.
+ */
+
+class DamageSystem {
+  init(world) {
+    // 1. Listen for player projectile hitting enemy
+    world.eventBus.on('PROJECTILE_HIT', (event) => {
+      this._applyDamageToEntity(world, event.targetId, event.damage, event.isCrit, event.hitX, event.hitY);
+    });
+
+    // 2. Listen for sniper projectile hitting tower
+    world.eventBus.on('TOWER_HIT', (event) => {
+      const towers = world.getEntitiesWith(TowerComponent);
+      if (towers.length > 0) {
+        this._applyDamageToEntity(world, towers[0], event.damage, false, event.hitX, event.hitY);
+      }
+    });
+
+    // 3. Listen for enemy ramming tower
+    world.eventBus.on('TOWER_CONTACT', (event) => {
+      const towers = world.getEntitiesWith(TowerComponent);
+      if (towers.length > 0) {
+        // Calculate contact damage based on scaled enemy damage
+        const enemyComp = world.getComponent(event.enemyId, EnemyComponent);
+        const enemyType = enemyComp ? enemyComp.type : 'scout';
+        const contactDamage = (enemyComp && enemyComp.damage) ? enemyComp.damage : (GameConfig.enemies[enemyType]?.baseDamage || 15);
+        this._applyDamageToEntity(world, towers[0], contactDamage, false, event.hitX, event.hitY);
+
+        // Notify death for particles, audio, and HUD tracking
+        world.eventBus.emit('ENTITY_DIED', {
+          entityId: event.enemyId,
+          isTower: false,
+          isEnemy: true,
+          enemyType,
+          baseReward: 0, // No kill bounty for ramming
+          x: event.hitX,
+          y: event.hitY
+        });
+
+        world.destroyEntity(event.enemyId);
+      }
+    });
+  }
+
+  update(world, deltaTime) {
+    // Passive health regeneration
+    const healthEntities = world.getEntitiesWith(HealthComponent);
+    for (const id of healthEntities) {
+      const health = world.getComponent(id, HealthComponent);
+      if (health.current > 0 && health.current < health.max && health.regenRate > 0) {
+        health.current = Math.min(health.max, health.current + health.regenRate * deltaTime);
+      }
+    }
+  }
+
+  _applyDamageToEntity(world, targetId, rawDamage, isCrit, hitX, hitY) {
+    const health = world.getComponent(targetId, HealthComponent);
+    if (!health || health.current <= 0) return;
+
+    const armor = world.getComponent(targetId, ArmorComponent);
+    const isTower = world.hasComponent(targetId, TowerComponent);
+
+    // Armor mitigation: flat subtraction followed by capped percentage reduction
+    const flatRed = armor ? (armor.flatReduction || 0) : 0;
+    const rawPct = armor ? (armor.percentReduction || 0) : 0;
+    const cappedPct = Math.min(0.85, rawPct); // Soft cap at 85%
+
+    const damageAfterFlat = Math.max(1, rawDamage - flatRed);
+    const netDamage = Math.max(1, Math.round(damageAfterFlat * (1 - cappedPct)));
+
+    health.current -= netDamage;
+
+    // Get position for particle/text feedback
+    const trans = world.getComponent(targetId, TransformComponent);
+    const posX = hitX !== undefined ? hitX : (trans ? trans.x : 0);
+    const posY = hitY !== undefined ? hitY : (trans ? trans.y : 0);
+
+    world.eventBus.emit('DAMAGE_DEALT', {
+      targetId,
+      netDamage,
+      isCrit: !!isCrit,
+      isTower,
+      x: posX,
+      y: posY
+    });
+
+    if (isTower) {
+      world.eventBus.emit('TOWER_DAMAGED', {
+        currentHp: health.current,
+        maxHp: health.max,
+        damageTaken: netDamage
+      });
+    }
+
+    // Death check
+    if (health.current <= 0) {
+      health.current = 0;
+      const enemyComp = world.getComponent(targetId, EnemyComponent);
+
+      world.eventBus.emit('ENTITY_DIED', {
+        entityId: targetId,
+        isTower,
+        isEnemy: !isTower,
+        enemyType: enemyComp ? enemyComp.type : null,
+        baseReward: enemyComp ? enemyComp.baseReward : 0,
+        x: posX,
+        y: posY
+      });
+
+      if (isTower) {
+        world.isGameOver = true;
+        world.eventBus.emit('GAME_OVER', {
+          reason: 'TOWER_DESTROYED'
+        });
+      } else {
+        world.destroyEntity(targetId);
+      }
+    }
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/WaveSystem.js
+  // ==================================================
+/**
+ * WaveSystem.js
+ * Manages wave scheduling, onboarding pacing curves, micro-jitter speed variance,
+ * 5-second intermission break countdowns, and mathematical stat scaling.
+ */
+
+class WaveSystem {
+  constructor() {
+    this.currentWave = 1;
+    this.state = 'ACTIVE'; // Wave 1 starts immediately
+    this.intermissionTimer = 0;
+    this.intermissionDuration = GameConfig.waves.intermissionDuration || 5.0;
+
+    this.spawnQueue = [];
+    this.spawnInterval = 1.2;
+    this.spawnTimer = 0.3; // First enemy spawns in 0.3s
+    this.totalEnemiesInWave = 0;
+    this.enemiesSpawned = 0;
+  }
+
+  init(world) {
+    // Initialized
+  }
+
+  startFirstWave(world) {
+    this.currentWave = 1;
+    this._startWave(world);
+  }
+
+  update(world, deltaTime) {
+    if (world.isGameOver) return;
+
+    if (this.state === 'INTERMISSION') {
+      this.intermissionTimer -= deltaTime;
+
+      world.eventBus.emit('INTERMISSION_TICK', {
+        remaining: Math.max(0, this.intermissionTimer),
+        duration: this.intermissionDuration,
+        progress: Math.max(0, this.intermissionTimer) / this.intermissionDuration,
+        nextWave: this.currentWave
+      });
+
+      if (this.intermissionTimer <= 0) {
+        this._startWave(world);
+      }
+    } else if (this.state === 'ACTIVE') {
+      // 1. Spawning
+      this.spawnTimer -= deltaTime;
+      if (this.spawnTimer <= 0 && this.spawnQueue.length > 0) {
+        const nextType = this.spawnQueue.shift();
+        this._spawnEnemy(world, nextType);
+        this.enemiesSpawned++;
+        this.spawnTimer = this.spawnInterval;
+
+        world.eventBus.emit('WAVE_PROGRESS', {
+          wave: this.currentWave,
+          spawned: this.enemiesSpawned,
+          total: this.totalEnemiesInWave,
+          alive: world.getEntitiesWith(EnemyComponent).length
+        });
+      }
+
+      // 2. Wave Completion Check
+      const activeEnemies = world.getEntitiesWith(EnemyComponent);
+      if (this.spawnQueue.length === 0 && activeEnemies.length === 0) {
+        this._completeWave(world);
+      }
+    }
+  }
+
+  _startWave(world) {
+    this.state = 'ACTIVE';
+    this.spawnQueue = this._generateWaveEnemies(this.currentWave);
+    this.totalEnemiesInWave = this.spawnQueue.length;
+    this.enemiesSpawned = 0;
+    this.spawnInterval = this._calculateSpawnInterval(this.currentWave);
+    this.spawnTimer = 0.5; // Short delay before first spawn
+
+    world.eventBus.emit('WAVE_STARTED', {
+      wave: this.currentWave,
+      totalEnemies: this.totalEnemiesInWave
+    });
+  }
+
+  _completeWave(world) {
+    world.eventBus.emit('WAVE_COMPLETED', {
+      wave: this.currentWave
+    });
+
+    this.currentWave++;
+    this.state = 'INTERMISSION';
+    this.intermissionDuration = GameConfig.waves.intermissionDuration || 5.0; // 5-second break phase
+    this.intermissionTimer = this.intermissionDuration;
+
+    world.eventBus.emit('INTERMISSION_STARTED', {
+      duration: this.intermissionDuration,
+      nextWave: this.currentWave
+    });
+  }
+
+  /**
+   * Generates enemy sequence matching onboarding curve and high-wave scaling
+   */
+  _generateWaveEnemies(wave) {
+    const list = [];
+
+    if (wave === 1) {
+      // Wave 1: 8–10 basic scouts with low density
+      const count = 9;
+      for (let i = 0; i < count; i++) list.push('scout');
+    } else if (wave === 2) {
+      // Wave 2: 12 scouts
+      for (let i = 0; i < 12; i++) list.push('scout');
+    } else if (wave === 3) {
+      // Wave 3: 16 scouts
+      for (let i = 0; i < 16; i++) list.push('scout');
+    } else if (wave === 4) {
+      // Wave 4: First Fighters (speed test) + scouts
+      for (let i = 0; i < 10; i++) list.push('scout');
+      for (let i = 0; i < 6; i++) list.push('fighter');
+    } else if (wave === 5) {
+      // Wave 5: Scouts + more fighters
+      for (let i = 0; i < 12; i++) list.push('scout');
+      for (let i = 0; i < 8; i++) list.push('fighter');
+    } else if (wave === 6) {
+      // Wave 6: First Tanks (DPS check)
+      for (let i = 0; i < 10; i++) list.push('scout');
+      for (let i = 0; i < 6; i++) list.push('fighter');
+      for (let i = 0; i < 2; i++) list.push('tank');
+    } else if (wave === 7) {
+      // Wave 7: More tanks
+      for (let i = 0; i < 12; i++) list.push('scout');
+      for (let i = 0; i < 6; i++) list.push('fighter');
+      for (let i = 0; i < 4; i++) list.push('tank');
+    } else if (wave === 8) {
+      // Wave 8: First Snipers (range pressure)
+      for (let i = 0; i < 10; i++) list.push('scout');
+      for (let i = 0; i < 6; i++) list.push('fighter');
+      for (let i = 0; i < 3; i++) list.push('tank');
+      for (let i = 0; i < 3; i++) list.push('sniper');
+    } else if (wave === 9) {
+      // Wave 9: Combined pre-boss swarm
+      for (let i = 0; i < 12; i++) list.push('scout');
+      for (let i = 0; i < 8; i++) list.push('fighter');
+      for (let i = 0; i < 4; i++) list.push('tank');
+      for (let i = 0; i < 4; i++) list.push('sniper');
+    } else {
+      // Wave 10+: Mixed composition with progressive scaling
+      const baseCount = 20 + (wave - 10) * 3;
+      const scoutCount = Math.floor(baseCount * 0.40);
+      const fighterCount = Math.floor(baseCount * 0.25);
+      const tankCount = Math.floor(baseCount * 0.20);
+      const sniperCount = Math.floor(baseCount * 0.15);
+
+      for (let i = 0; i < scoutCount; i++) list.push('scout');
+      for (let i = 0; i < fighterCount; i++) list.push('fighter');
+      for (let i = 0; i < tankCount; i++) list.push('tank');
+      for (let i = 0; i < sniperCount; i++) list.push('sniper');
+    }
+
+    // Shuffle queue slightly so enemy types interleave smoothly
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+
+    return list;
+  }
+
+  _calculateSpawnInterval(wave) {
+    if (wave === 1) return 1.35; // Low density for early onboarding
+    if (wave <= 3) return 1.05;
+    if (wave <= 6) return 0.85;
+    return Math.max(0.45, 0.80 - (wave - 6) * 0.03);
+  }
+
+  _spawnEnemy(world, type) {
+    const archetype = GameConfig.enemies[type];
+    if (!archetype) return;
+
+    const enemyId = world.createEntity();
+    const w = world.width || 1200;
+    const h = world.height || 800;
+    const centerX = w / 2;
+    const centerY = h / 2;
+
+    // Spawn tightly along rectangular viewport perimeter (35px offscreen)
+    const margin = 35;
+    const side = Math.floor(Math.random() * 4); // 0: Top, 1: Right, 2: Bottom, 3: Left
+    let spawnX, spawnY;
+
+    switch (side) {
+      case 0: // Top
+        spawnX = Math.random() * w;
+        spawnY = -margin;
+        break;
+      case 1: // Right
+        spawnX = w + margin;
+        spawnY = Math.random() * h;
+        break;
+      case 2: // Bottom
+        spawnX = Math.random() * w;
+        spawnY = h + margin;
+        break;
+      case 3: // Left
+        spawnX = -margin;
+        spawnY = Math.random() * h;
+        break;
+    }
+
+    // 1. Micro-jitter speed variation (±5% to ±8%)
+    const jitterMin = GameConfig.waves.speedJitterMin || -0.07;
+    const jitterMax = GameConfig.waves.speedJitterMax || 0.07;
+    const jitter = 1 + (jitterMin + Math.random() * (jitterMax - jitterMin));
+    const finalSpeed = archetype.baseSpeed * jitter;
+
+    // 2. Exponential stat scaling for higher waves
+    // HP = BaseHP * (1.10 ^ (Wave - 1))
+    // Damage = BaseDmg * (1.07 ^ (Wave - 1))
+    const wave = this.currentWave;
+    const hpMultiplier = Math.pow(GameConfig.waves.hpScaleFactor, wave - 1);
+    const scaledHp = Math.round(archetype.baseHp * hpMultiplier);
+
+    const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, wave - 1);
+    const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier));
+
+    const isSniper = archetype.type === 'sniper';
+
+    // Sniper stop distance dynamically adapts to tower attack range
+    // Ensures snipers always stop within player attack zone (e.g. 90% of range, max 240px)
+    let stopDistance = archetype.stopDistance || 240;
+    if (isSniper) {
+      const towers = world.getEntitiesWith(TowerComponent, AttackComponent);
+      const towerAttack = towers.length > 0 ? world.getComponent(towers[0], AttackComponent) : null;
+      const currentTowerRange = towerAttack ? towerAttack.range : GameConfig.tower.baseRange;
+      stopDistance = Math.min(archetype.stopDistance || 240, Math.floor(currentTowerRange * 0.90));
+    }
+
+    // Random rotation for scout and tank only; fighter and sniper do not rotate
+    let rotSpeed = 0;
+    if (archetype.type === 'scout') {
+      rotSpeed = (Math.random() < 0.5 ? -1 : 1) * (1.2 + Math.random() * 1.6); // 1.2 to 2.8 rad/s
+    } else if (archetype.type === 'tank') {
+      rotSpeed = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.6); // 0.4 to 1.0 rad/s
+    }
+
+    const angleToCenter = Math.atan2(centerY - spawnY, centerX - spawnX);
+    const initialRotation = (archetype.type === 'scout' || archetype.type === 'tank')
+      ? Math.random() * Math.PI * 2
+      : angleToCenter;
+
+    world.addComponent(enemyId, new TransformComponent(spawnX, spawnY, initialRotation));
+    world.addComponent(enemyId, new VelocityComponent(0, 0, archetype.baseSpeed, finalSpeed));
+    world.addComponent(enemyId, new CircleColliderComponent(archetype.radius, archetype.mass, false));
+    world.addComponent(enemyId, new HealthComponent(scaledHp, scaledHp, 0));
+    world.addComponent(enemyId, new ArmorComponent(0, 0));
+    world.addComponent(enemyId, new RenderComponent(
+      'polygon',
+      archetype.sides,
+      archetype.radius,
+      archetype.color,
+      archetype.glowColor,
+      archetype.glowBlur
+    ));
+    world.addComponent(enemyId, new EnemyComponent(
+      archetype.type,
+      archetype.baseReward,
+      isSniper,
+      0, // initial shootCooldown
+      archetype.shootInterval || 2.8,
+      stopDistance,
+      rotSpeed,
+      scaledDamage
+    ));
+
+    world.eventBus.emit('ENEMY_SPAWNED', {
+      entityId: enemyId,
+      type: archetype.type,
+      hp: scaledHp,
+      damage: scaledDamage
+    });
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/EconomySystem.js
+  // ==================================================
+/**
+ * EconomySystem.js
+ * Tracks credit income, kill bounties, and wave clear bonuses.
+ * Interacts with EconomyComponent and dispatches balance change events.
+ */
+
+class EconomySystem {
+  init(world) {
+    // 1. Enemy kill bounty
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      if (!event.isEnemy) return;
+
+      const eco = this._getEconomy(world);
+      if (!eco) return;
+
+      const baseReward = event.baseReward !== undefined ? event.baseReward : 10;
+      if (baseReward <= 0) return;
+
+      const earned = Math.max(1, Math.round(baseReward * (eco.killMultiplier || 1.0)));
+      eco.credits += earned;
+
+      world.eventBus.emit('CREDITS_CHANGED', {
+        credits: eco.credits,
+        earned,
+        source: 'kill',
+        x: event.x,
+        y: event.y
+      });
+    });
+
+    // 2. Wave completion reward
+    world.eventBus.on('WAVE_COMPLETED', (event) => {
+      const eco = this._getEconomy(world);
+      if (!eco) return;
+
+      const baseBonus = GameConfig.waves.waveBaseReward || 50;
+      const growth = GameConfig.waves.waveRewardGrowth || 25;
+      const rawBonus = baseBonus + (event.wave || 1) * growth;
+      const earned = Math.round(rawBonus * (eco.waveMultiplier || 1.0));
+
+      eco.credits += earned;
+
+      world.eventBus.emit('CREDITS_CHANGED', {
+        credits: eco.credits,
+        earned,
+        source: 'wave'
+      });
+    });
+
+    // 3. Purchase deduction
+    world.eventBus.on('UPGRADE_PURCHASED', (event) => {
+      const eco = this._getEconomy(world);
+      if (!eco) return;
+
+      eco.credits -= event.cost;
+
+      world.eventBus.emit('CREDITS_CHANGED', {
+        credits: eco.credits,
+        earned: -event.cost,
+        source: 'purchase'
+      });
+    });
+  }
+
+  update(world, deltaTime) {
+    // Economy is event-driven; no per-frame polling needed here
+  }
+
+  _getEconomy(world) {
+    const towers = world.getEntitiesWith(TowerComponent, EconomyComponent);
+    if (towers.length > 0) {
+      return world.getComponent(towers[0], EconomyComponent);
+    }
+    return null;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/ParticleSystem.js
+  // ==================================================
+/**
+ * ParticleSystem.js
+ * Manages geometric neon debris, shockwave rings, and floating combat text.
+ */
+
+class ParticleSystem {
+  constructor() {
+    this.particles = [];
+    this.shockwaves = [];
+    this.floatingTexts = [];
+  }
+
+  init(world) {
+    // 1. Damage dealt: hit sparks only (no screen-cluttering damage numbers)
+    world.eventBus.on('DAMAGE_DEALT', (event) => {
+      this._spawnDamageSparks(event.x, event.y, event.isCrit ? '#ffe600' : '#00f3ff', event.isCrit ? 10 : 5);
+    });
+
+    // 2. Kill bounty: clean and rewarding floating currency text (+X ◈)
+    world.eventBus.on('CREDITS_CHANGED', (event) => {
+      if (event.source === 'kill' && event.earned > 0 && event.x !== undefined && event.y !== undefined) {
+        this.floatingTexts.push({
+          x: event.x + (Math.random() * 10 - 5),
+          y: event.y - 12,
+          text: `+${event.earned} ◈`,
+          color: '#00ff88', // Vibrant cyber-cash neon green (distinct from white/yellow damage)
+          fontSize: event.earned >= 30 ? 22 : 18,
+          isCrit: event.earned >= 30, // Extra glow for high-value targets like tanks
+          vy: 60,
+          life: 1.0,
+          maxLife: 1.0
+        });
+      }
+    });
+
+    // 2. Entity explosion: bursting shards + expanding shockwave
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      const colorMap = {
+        scout: '#ffe600',
+        fighter: '#ff0055',
+        tank: '#9d00ff',
+        sniper: '#ff7700'
+      };
+      const color = colorMap[event.enemyType] || '#00f3ff';
+
+      // Burst of fragments
+      this._spawnExplosion(event.x, event.y, color, event.enemyType === 'tank' ? 24 : 14);
+
+      // Expanding neon shockwave
+      this.shockwaves.push({
+        x: event.x,
+        y: event.y,
+        radius: 6,
+        maxRadius: event.enemyType === 'tank' ? 55 : 35,
+        color,
+        lineWidth: 3,
+        life: 0.45,
+        maxLife: 0.45
+      });
+    });
+
+    // 3. Sniper muzzle flare or shot effect
+    world.eventBus.on('ENEMY_SNIPER_SHOT', (event) => {
+      this._spawnDamageSparks(event.x, event.y, '#ff7700', 6);
+    });
+  }
+
+  update(world, deltaTime) {
+    // 1. Update particles
+    for (let i = this.particles.length - 1; i >= 0; i--) {
+      const p = this.particles[i];
+      p.x += p.vx * deltaTime;
+      p.y += p.vy * deltaTime;
+      p.vx *= 0.94; // friction
+      p.vy *= 0.94;
+      p.rotation += p.vRot * deltaTime;
+      p.life -= deltaTime;
+
+      if (p.life <= 0) {
+        this.particles.splice(i, 1);
+      }
+    }
+
+    // 2. Update shockwaves
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const sw = this.shockwaves[i];
+      sw.life -= deltaTime;
+      const progress = 1 - (sw.life / sw.maxLife);
+      sw.radius = 6 + (sw.maxRadius - 6) * progress;
+
+      if (sw.life <= 0) {
+        this.shockwaves.splice(i, 1);
+      }
+    }
+
+    // 3. Update floating texts
+    for (let i = this.floatingTexts.length - 1; i >= 0; i--) {
+      const ft = this.floatingTexts[i];
+      ft.y -= ft.vy * deltaTime;
+      ft.vy *= 0.96;
+      ft.life -= deltaTime;
+
+      if (ft.life <= 0) {
+        this.floatingTexts.splice(i, 1);
+      }
+    }
+  }
+
+  _spawnDamageSparks(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 70 + Math.random() * 120;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 10,
+        size: 2.5 + Math.random() * 2,
+        color,
+        life: 0.35 + Math.random() * 0.2,
+        maxLife: 0.55
+      });
+    }
+  }
+
+  _spawnExplosion(x, y, color, count) {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 100 + Math.random() * 220;
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 15,
+        size: 3 + Math.random() * 4,
+        color,
+        life: 0.45 + Math.random() * 0.35,
+        maxLife: 0.8
+      });
+    }
+  }
+
+  getParticles() {
+    return this.particles;
+  }
+
+  getShockwaves() {
+    return this.shockwaves;
+  }
+
+  getFloatingTexts() {
+    return this.floatingTexts;
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/AudioSystem.js
+  // ==================================================
+/**
+ * AudioSystem.js
+ * Procedural Web Audio API sound synthesizer driven by EventBus events.
+ */
+
+class AudioSystem {
+  constructor() {
+    this.audioCtx = null;
+    this.isMuted = false;
+    this.isInitialized = false;
+
+    // Background music playlist
+    this.tracks = [
+      'music/background_music_1.mp3',
+      'music/background_music_2.mp3'
+    ];
+    this.currentTrackIndex = 0;
+    this.bgmAudio = null;
+    this.bgmVolume = 0.35; // Balanced background volume relative to SFX
+    this.isPlayingBGM = false;
+    this._windowListenersAttached = false;
+    this._fallbackTried = false;
+  }
+
+  _initBGM() {
+    if (this.bgmAudio || typeof Audio === 'undefined') return;
+
+    this.bgmAudio = new Audio();
+    this.bgmAudio.volume = this.bgmVolume;
+    this.bgmAudio.preload = 'auto';
+
+    // Alternate tracks on track end and loop indefinitely
+    this.bgmAudio.addEventListener('ended', () => {
+      this.currentTrackIndex = (this.currentTrackIndex + 1) % this.tracks.length;
+      this._loadAndPlayTrack();
+    });
+
+    // Fallback if relative path requires traversal (e.g. launched from subfolder)
+    this.bgmAudio.addEventListener('error', () => {
+      if (!this._fallbackTried) {
+        this._fallbackTried = true;
+        this.tracks = this.tracks.map(t => t.startsWith('../') ? t.slice(3) : '../' + t);
+        this._loadAndPlayTrack();
+      }
+    });
+
+    this._loadTrack(this.currentTrackIndex);
+  }
+
+  _loadTrack(index) {
+    if (!this.bgmAudio) return;
+    this.bgmAudio.src = this.tracks[index];
+    this.bgmAudio.muted = this.isMuted;
+    this.bgmAudio.volume = this.bgmVolume;
+  }
+
+  _loadAndPlayTrack() {
+    this._loadTrack(this.currentTrackIndex);
+    if (!this.isMuted && this.isPlayingBGM) {
+      this.bgmAudio.play().catch(() => {});
+    }
+  }
+
+  startBGM() {
+    this._initBGM();
+    this.isPlayingBGM = true;
+    if (this.isMuted || !this.bgmAudio) return;
+
+    this.bgmAudio.play().catch(() => {
+      // Browser autoplay restriction, will unlock on first user gesture
+    });
+  }
+
+  pauseBGM() {
+    this.isPlayingBGM = false;
+    if (this.bgmAudio) {
+      this.bgmAudio.pause();
+    }
+  }
+
+  resumeBGM() {
+    this.isPlayingBGM = true;
+    if (this.isMuted) return;
+    this._initBGM();
+    if (this.bgmAudio) {
+      this.bgmAudio.play().catch(() => {});
+    }
+  }
+
+  init(world) {
+    this._initBGM();
+    this.startBGM();
+
+    // Attempt init on first user interaction
+    if (!this._windowListenersAttached && typeof window !== 'undefined') {
+      this._windowListenersAttached = true;
+      const unlockHandler = () => {
+        this._ensureAudioContext();
+        if (this.isPlayingBGM && !this.isMuted && this.bgmAudio && this.bgmAudio.paused) {
+          this.bgmAudio.play().catch(() => {});
+        }
+        window.removeEventListener('click', unlockHandler);
+        window.removeEventListener('keydown', unlockHandler);
+        window.removeEventListener('touchstart', unlockHandler);
+      };
+      window.addEventListener('click', unlockHandler);
+      window.addEventListener('keydown', unlockHandler);
+      window.addEventListener('touchstart', unlockHandler);
+    }
+
+    // Event bus subscriptions
+    world.eventBus.on('PROJECTILE_FIRED', (event) => {
+      this.playLaserSound(event.isCrit);
+    });
+
+    world.eventBus.on('DAMAGE_DEALT', (event) => {
+      if (event.isCrit) {
+        this.playCritSound();
+      } else {
+        this.playHitSound();
+      }
+    });
+
+    world.eventBus.on('ENTITY_DIED', (event) => {
+      this.playExplosionSound(event.enemyType);
+    });
+
+    world.eventBus.on('UPGRADE_PURCHASED', () => {
+      this.playUpgradeSound();
+    });
+
+    world.eventBus.on('WAVE_STARTED', () => {
+      this.playWaveAlertSound();
+    });
+
+    world.eventBus.on('WAVE_COMPLETED', () => {
+      this.playWaveClearSound();
+    });
+
+    world.eventBus.on('GAME_OVER', () => {
+      this.playGameOverSound();
+      this.pauseBGM();
+    });
+
+    world.eventBus.on('RESTART_GAME', () => {
+      this.resumeBGM();
+    });
+  }
+
+  update(world, deltaTime) {
+    // Audio is event-driven; no frame update required
+  }
+
+  toggleMute() {
+    this.isMuted = !this.isMuted;
+    if (this.bgmAudio) {
+      this.bgmAudio.muted = this.isMuted;
+      if (!this.isMuted && this.isPlayingBGM && this.bgmAudio.paused) {
+        this.bgmAudio.play().catch(() => {});
+      }
+    }
+    return this.isMuted;
+  }
+
+  _ensureAudioContext() {
+    if (this.isMuted || typeof window === 'undefined') return null;
+    if (!this.audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) {
+        this.audioCtx = new AudioContextClass();
+        this.isInitialized = true;
+      }
+    }
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume();
+    }
+    return this.audioCtx;
+  }
+
+  playLaserSound(isCrit) {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = isCrit ? 'sawtooth' : 'sine';
+    const startFreq = isCrit ? 920 : 680;
+    const endFreq = isCrit ? 220 : 180;
+
+    osc.frequency.setValueAtTime(startFreq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(endFreq, ctx.currentTime + 0.08);
+
+    gain.gain.setValueAtTime(isCrit ? 0.08 : 0.05, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  }
+
+  playHitSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(320, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(90, ctx.currentTime + 0.04);
+
+    gain.gain.setValueAtTime(0.03, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.04);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.04);
+  }
+
+  playCritSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    // Dual-tone harmonic chime
+    [1200, 1600].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.2, ctx.currentTime + 0.12);
+
+      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    });
+  }
+
+  playExplosionSound(enemyType) {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const bufferSize = ctx.sampleRate * 0.2;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    const isHeavy = enemyType === 'tank';
+    filter.frequency.setValueAtTime(isHeavy ? 350 : 600, ctx.currentTime);
+    filter.frequency.linearRampToValueAtTime(60, ctx.currentTime + 0.2);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(isHeavy ? 0.18 : 0.10, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+
+    noise.start();
+    noise.stop(ctx.currentTime + 0.2);
+  }
+
+  playUpgradeSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    // Ascending arpeggio
+    const notes = [440, 554, 659];
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      const startTime = ctx.currentTime + idx * 0.05;
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.06, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.1);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.1);
+    });
+  }
+
+  playWaveAlertSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(440, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.09);
+
+    gain.gain.setValueAtTime(0.05, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.22);
+  }
+
+  playWaveClearSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      const startTime = ctx.currentTime + idx * 0.06;
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.06, startTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + 0.15);
+    });
+  }
+
+  playGameOverSound() {
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(260, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, ctx.currentTime + 0.8);
+
+    gain.gain.setValueAtTime(0.12, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.8);
+  }
+}
+
+
+  // ==================================================
+  // Source: src/systems/RenderSystem.js
+  // ==================================================
+/**
+ * RenderSystem.js
+ * Renders the Geometric Neon Cyberpunk visual frame to HTML5 Canvas.
+ * Strictly read-only: does not modify any component or entity state.
+ */
+
+class RenderSystem {
+  constructor(canvas, particleSystem) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.particleSystem = particleSystem;
+    this.gridOffset = 0;
+    this.corePulseAngle = 0;
+    this.radarRotation = 0;
+  }
+
+  update(world, deltaTime) {
+    const ctx = this.ctx;
+    const width = this.canvas.width;
+    const height = this.canvas.height;
+
+    this.corePulseAngle += deltaTime * 2.5;
+    this.radarRotation += deltaTime * 0.6;
+
+    // 1. Clear background
+    ctx.fillStyle = GameConfig.colors.background;
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Draw animated cyber grid
+    this._drawGrid(ctx, width, height);
+
+    // 3. Draw Tower range ring and tower entity
+    this._drawTowerAndRange(ctx, world);
+
+    // 4. Draw enemies and health bars
+    this._drawEnemies(ctx, world);
+
+    // 5. Draw projectiles
+    this._drawProjectiles(ctx, world);
+
+    // 6. Draw particles and shockwaves
+    if (this.particleSystem) {
+      this._drawParticles(ctx);
+      this._drawShockwaves(ctx);
+      this._drawFloatingTexts(ctx);
+    }
+  }
+
+  _drawGrid(ctx, width, height) {
+    const gridSize = GameConfig.canvas.gridSize || 40;
+    ctx.save();
+    ctx.strokeStyle = GameConfig.canvas.gridColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+
+    for (let x = 0; x <= width; x += gridSize) {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+    }
+    for (let y = 0; y <= height; y += gridSize) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  _drawTowerAndRange(ctx, world) {
+    const towers = world.getEntitiesWith(TowerComponent, TransformComponent, AttackComponent, RenderComponent);
+    if (towers.length === 0) return;
+
+    const towerId = towers[0];
+    const trans = world.getComponent(towerId, TransformComponent);
+    const attack = world.getComponent(towerId, AttackComponent);
+    const render = world.getComponent(towerId, RenderComponent);
+    const targetComp = world.getComponent(towerId, TargetComponent);
+
+    ctx.save();
+
+    // 1. Redesigned Visible Cyber Attack Range Field
+    this._drawRangeField(ctx, trans.x, trans.y, attack.range);
+
+    // 2. Target lock-on brackets
+    if (targetComp && targetComp.targetEntityId) {
+      const enemyTrans = world.getComponent(targetComp.targetEntityId, TransformComponent);
+      if (enemyTrans) {
+        this._drawLockOnReticle(ctx, enemyTrans.x, enemyTrans.y);
+      }
+    }
+
+    // 3. Tower base (tech octagon)
+    ctx.save();
+    ctx.translate(trans.x, trans.y);
+    ctx.shadowColor = render.glowColor;
+    ctx.shadowBlur = render.glowBlur;
+
+    // Outer octagonal armor
+    ctx.fillStyle = '#0d1520';
+    ctx.strokeStyle = render.color;
+    ctx.lineWidth = 3;
+    this._drawPolygonPath(ctx, 0, 0, render.radius, 8, Math.PI / 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Inner mechanical details
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.4)';
+    ctx.lineWidth = 1.5;
+    this._drawPolygonPath(ctx, 0, 0, render.radius * 0.7, 8, 0);
+    ctx.stroke();
+
+    // 4. Rotating energy core
+    const corePulse = 0.85 + Math.sin(this.corePulseAngle) * 0.15;
+    ctx.save();
+    ctx.rotate(this.corePulseAngle * 0.5);
+    ctx.fillStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 15;
+    this._drawPolygonPath(ctx, 0, 0, render.radius * 0.35 * corePulse, 4, 0);
+    ctx.fill();
+    ctx.restore();
+
+    // 5. Weapon turret barrel pointing towards rotation
+    ctx.rotate(trans.rotation);
+    ctx.fillStyle = '#102233';
+    ctx.strokeStyle = '#00f3ff';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 10;
+
+    // Dual railgun barrels
+    const barrelLength = render.radius + 14;
+    const barrelWidth = 4;
+    const barrelGap = 5;
+
+    // Left barrel
+    ctx.fillRect(4, -barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+    ctx.strokeRect(4, -barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+
+    // Right barrel
+    ctx.fillRect(4, barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+    ctx.strokeRect(4, barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+
+    // Muzzle capacitor
+    ctx.fillStyle = '#00f3ff';
+    ctx.fillRect(barrelLength - 2, -barrelGap - barrelWidth / 2, 4, barrelWidth);
+    ctx.fillRect(barrelLength - 2, barrelGap - barrelWidth / 2, 4, barrelWidth);
+
+    ctx.restore();
+    ctx.restore();
+  }
+
+  _drawRangeField(ctx, cx, cy, range) {
+    ctx.save();
+
+    // 1. Cyberpunk radial gradient aura
+    const radGrad = ctx.createRadialGradient(cx, cy, range * 0.15, cx, cy, range);
+    radGrad.addColorStop(0, 'rgba(0, 243, 255, 0.005)');
+    radGrad.addColorStop(0.65, 'rgba(0, 243, 255, 0.03)');
+    radGrad.addColorStop(0.9, 'rgba(0, 243, 255, 0.07)');
+    radGrad.addColorStop(1, 'rgba(0, 243, 255, 0.16)');
+
+    ctx.fillStyle = radGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, range, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 2. Inner concentric distance rings (Radar grid)
+    // 50% distance ring
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.14)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 8]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, range * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 75% distance ring
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.18)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 10]);
+    ctx.beginPath();
+    ctx.arc(cx, cy, range * 0.75, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // 3. Animated outer perimeter (tech dashes)
+    ctx.strokeStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 14;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([16, 12, 6, 12]);
+    ctx.lineDashOffset = -this.radarRotation * 40;
+    ctx.beginPath();
+    ctx.arc(cx, cy, range, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Counter-rotating inner perimeter accent
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.35)';
+    ctx.shadowBlur = 6;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([24, 24]);
+    ctx.lineDashOffset = this.radarRotation * 25;
+    ctx.beginPath();
+    ctx.arc(cx, cy, range - 5, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.setLineDash([]);
+
+    // 4. Tactical radar crosshair ticks (8 compass points)
+    ctx.strokeStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 10;
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = this.radarRotation * 0.25 + (i * Math.PI) / 4;
+      const x1 = cx + (range - 8) * Math.cos(angle);
+      const y1 = cy + (range - 8) * Math.sin(angle);
+      const x2 = cx + (range + 8) * Math.cos(angle);
+      const y2 = cy + (range + 8) * Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // 5. Tactical range readout pill
+    const tagAngle = -Math.PI / 2 + 0.38;
+    const tagX = cx + (range + 16) * Math.cos(tagAngle);
+    const tagY = cy + (range + 16) * Math.sin(tagAngle);
+
+    ctx.font = '900 11px Orbitron, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 10;
+    ctx.fillText(`ZONE: ${Math.round(range)}px`, tagX, tagY);
+
+    ctx.restore();
+  }
+
+  _drawLockOnReticle(ctx, x, y) {
+    ctx.save();
+    ctx.strokeStyle = '#00f3ff';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 8;
+
+    const r = 24;
+    const corner = 6;
+
+    // 4 corner reticle brackets
+    // Top-Left
+    ctx.beginPath();
+    ctx.moveTo(x - r + corner, y - r);
+    ctx.lineTo(x - r, y - r);
+    ctx.lineTo(x - r, y - r + corner);
+    ctx.stroke();
+
+    // Top-Right
+    ctx.beginPath();
+    ctx.moveTo(x + r - corner, y - r);
+    ctx.lineTo(x + r, y - r);
+    ctx.lineTo(x + r, y - r + corner);
+    ctx.stroke();
+
+    // Bottom-Left
+    ctx.beginPath();
+    ctx.moveTo(x - r + corner, y + r);
+    ctx.lineTo(x - r, y + r);
+    ctx.lineTo(x - r, y + r - corner);
+    ctx.stroke();
+
+    // Bottom-Right
+    ctx.beginPath();
+    ctx.moveTo(x + r - corner, y + r);
+    ctx.lineTo(x + r, y + r);
+    ctx.lineTo(x + r, y + r - corner);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  _drawEnemies(ctx, world) {
+    const enemies = world.getEntitiesWith(EnemyComponent, TransformComponent, RenderComponent, HealthComponent);
+
+    for (const id of enemies) {
+      const trans = world.getComponent(id, TransformComponent);
+      const render = world.getComponent(id, RenderComponent);
+      const health = world.getComponent(id, HealthComponent);
+      const enemy = world.getComponent(id, EnemyComponent);
+
+      ctx.save();
+      ctx.translate(trans.x, trans.y);
+      ctx.rotate(trans.rotation);
+
+      ctx.shadowColor = render.glowColor;
+      ctx.shadowBlur = render.glowBlur;
+      ctx.fillStyle = '#0a0d14';
+      ctx.strokeStyle = render.color;
+      ctx.lineWidth = 2.5;
+
+      if (enemy.type === 'fighter') {
+        // Fighter: aerodynamic dart shape
+        this._drawDartPath(ctx, render.radius);
+      } else {
+        // Scout (3-sided), Tank (6-sided), Sniper (4-sided diamond)
+        this._drawPolygonPath(ctx, 0, 0, render.radius, render.sides, 0);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      // Inner geometric accent
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+      ctx.lineWidth = 1;
+      if (enemy.type === 'tank') {
+        this._drawPolygonPath(ctx, 0, 0, render.radius * 0.55, 6, Math.PI / 6);
+        ctx.stroke();
+      } else if (enemy.type === 'sniper') {
+        // Sniper charging optic core
+        ctx.fillStyle = render.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+
+      // Health bar above enemy (if damaged)
+      if (health.current < health.max) {
+        this._drawHealthBar(ctx, trans.x, trans.y - render.radius - 8, render.radius * 2, health.current, health.max);
+      }
+    }
+  }
+
+  _drawDartPath(ctx, radius) {
+    ctx.beginPath();
+    ctx.moveTo(radius * 1.3, 0); // Pointy tip forward
+    ctx.lineTo(-radius, radius * 0.9); // Wing tip right
+    ctx.lineTo(-radius * 0.5, 0); // Inner notch
+    ctx.lineTo(-radius, -radius * 0.9); // Wing tip left
+    ctx.closePath();
+  }
+
+  _drawHealthBar(ctx, x, y, width, current, max) {
+    const barWidth = Math.max(28, width);
+    const height = 5;
+    const halfW = barWidth / 2;
+    const pct = Math.max(0, Math.min(1, current / max));
+
+    ctx.save();
+    // High-contrast background with dark stroke
+    ctx.fillStyle = 'rgba(5, 8, 14, 0.9)';
+    ctx.fillRect(x - halfW - 1, y - 1, barWidth + 2, height + 2);
+
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x - halfW - 1, y - 1, barWidth + 2, height + 2);
+
+    // Glowing neon fill
+    ctx.fillStyle = pct > 0.4 ? '#00ff66' : '#ff0055';
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.shadowBlur = 6;
+    ctx.fillRect(x - halfW, y, barWidth * pct, height);
+    ctx.restore();
+  }
+
+  _drawProjectiles(ctx, world) {
+    const projectiles = world.getEntitiesWith(ProjectileComponent, TransformComponent, RenderComponent);
+
+    for (const id of projectiles) {
+      const trans = world.getComponent(id, TransformComponent);
+      const render = world.getComponent(id, RenderComponent);
+      const proj = world.getComponent(id, ProjectileComponent);
+
+      ctx.save();
+      ctx.translate(trans.x, trans.y);
+      ctx.rotate(trans.rotation);
+
+      ctx.shadowColor = render.glowColor;
+      ctx.shadowBlur = render.glowBlur;
+      ctx.fillStyle = render.color;
+
+      if (!proj.isEnemy) {
+        // Player neon bolt
+        const length = proj.isCrit ? 16 : 12;
+        const width = proj.isCrit ? 5 : 3.5;
+        ctx.fillRect(-length / 2, -width / 2, length, width);
+      } else {
+        // Sniper beam sphere
+        ctx.beginPath();
+        ctx.arc(0, 0, render.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+  }
+
+  _drawParticles(ctx) {
+    const particles = this.particleSystem.getParticles();
+    for (const p of particles) {
+      const alpha = Math.max(0, Math.min(1, p.life / p.maxLife));
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation);
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 8;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+      ctx.restore();
+    }
+  }
+
+  _drawShockwaves(ctx) {
+    const shockwaves = this.particleSystem.getShockwaves();
+    for (const sw of shockwaves) {
+      const alpha = Math.max(0, Math.min(1, sw.life / sw.maxLife));
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = sw.color;
+      ctx.lineWidth = sw.lineWidth;
+      ctx.shadowColor = sw.color;
+      ctx.shadowBlur = 12;
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  _drawFloatingTexts(ctx) {
+    const texts = this.particleSystem.getFloatingTexts();
+    for (const ft of texts) {
+      const alpha = Math.max(0, Math.min(1, ft.life / ft.maxLife));
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = `900 ${ft.fontSize}px 'Rajdhani', 'Orbitron', 'Segoe UI', monospace`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // 1. High-contrast dark outline so text pops on any background
+      ctx.lineWidth = ft.isCrit ? 4 : 3;
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.95)';
+      ctx.shadowBlur = 0; // clear shadow for crisp border
+      ctx.strokeText(ft.text, ft.x, ft.y);
+
+      // 2. Bright glowing fill
+      ctx.fillStyle = ft.color;
+      ctx.shadowColor = ft.color;
+      ctx.shadowBlur = ft.isCrit ? 16 : 8;
+      ctx.fillText(ft.text, ft.x, ft.y);
+
+      ctx.restore();
+    }
+  }
+
+  _drawPolygonPath(ctx, cx, cy, radius, sides, startAngle = 0) {
+    ctx.beginPath();
+    for (let i = 0; i < sides; i++) {
+      const a = startAngle + (i * 2 * Math.PI) / sides;
+      const x = cx + radius * Math.cos(a);
+      const y = cy + radius * Math.sin(a);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+}
+
+
+  // ==================================================
+  // Source: src/managers/UpgradeManager.js
+  // ==================================================
+/**
+ * UpgradeManager.js
+ * Handles upgrade calculations, exponential cost scaling, and mutation
+ * of component parameters upon purchase.
+ */
+
+class UpgradeManager {
+  constructor() {
+    this.levels = new Map();
+    // Initialize all 12 upgrades to level 0
+    for (const key of Object.keys(GameConfig.upgrades)) {
+      this.levels.set(key, 0);
+    }
+  }
+
+  getLevel(upgradeId) {
+    return this.levels.get(upgradeId) || 0;
+  }
+
+  getCost(upgradeId) {
+    const def = GameConfig.upgrades[upgradeId];
+    if (!def) return Infinity;
+    const lvl = this.getLevel(upgradeId);
+    if (def.maxLevel && lvl >= def.maxLevel) return Infinity;
+    return Math.round(def.baseCost * Math.pow(def.costMultiplier, lvl));
+  }
+
+  canAfford(upgradeId, credits) {
+    const cost = this.getCost(upgradeId);
+    return credits >= cost && isFinite(cost);
+  }
+
+  getCurrentValue(upgradeId) {
+    const lvl = this.getLevel(upgradeId);
+    const def = GameConfig.upgrades[upgradeId];
+    if (!def) return 0;
+
+    switch (upgradeId) {
+      case 'damage':
+        return GameConfig.tower.baseDamage + lvl * def.valuePerLevel;
+      case 'attackSpeed':
+        return GameConfig.tower.baseAttackSpeed + lvl * def.valuePerLevel;
+      case 'critChance':
+        return GameConfig.tower.baseCritChance + lvl * def.valuePerLevel;
+      case 'critDamage':
+        return GameConfig.tower.baseCritMultiplier + lvl * def.valuePerLevel;
+      case 'multishotChance':
+        return GameConfig.tower.baseMultishotChance + lvl * def.valuePerLevel;
+      case 'multishotTargets':
+        return GameConfig.tower.baseMultishotCount + lvl * def.valuePerLevel;
+      case 'range': {
+        const effectiveLvl = def.maxLevel ? Math.min(lvl, def.maxLevel) : lvl;
+        return GameConfig.tower.baseRange + effectiveLvl * def.valuePerLevel;
+      }
+      case 'distanceDamage':
+        return (GameConfig.tower.baseDistanceDamageCoeff || 0.001) + lvl * def.valuePerLevel;
+      case 'maxHealth':
+        return GameConfig.tower.baseHealth + lvl * def.valuePerLevel;
+      case 'armorPercent':
+        return Math.min(0.85, GameConfig.tower.basePercentArmor + lvl * def.valuePerLevel);
+      case 'flatArmor':
+        return GameConfig.tower.baseFlatArmor + lvl * def.valuePerLevel;
+      case 'healthRegen':
+        return GameConfig.tower.baseRegen + lvl * def.valuePerLevel;
+      case 'killCashBonus':
+        return 1.0 + lvl * def.valuePerLevel;
+      case 'waveCashBonus':
+        return 1.0 + lvl * def.valuePerLevel;
+      default:
+        return 0;
+    }
+  }
+
+  getNextValue(upgradeId) {
+    const lvl = this.getLevel(upgradeId) + 1;
+    const def = GameConfig.upgrades[upgradeId];
+    if (!def) return 0;
+
+    switch (upgradeId) {
+      case 'damage':
+        return GameConfig.tower.baseDamage + lvl * def.valuePerLevel;
+      case 'attackSpeed':
+        return GameConfig.tower.baseAttackSpeed + lvl * def.valuePerLevel;
+      case 'critChance':
+        return GameConfig.tower.baseCritChance + lvl * def.valuePerLevel;
+      case 'critDamage':
+        return GameConfig.tower.baseCritMultiplier + lvl * def.valuePerLevel;
+      case 'multishotChance':
+        return GameConfig.tower.baseMultishotChance + lvl * def.valuePerLevel;
+      case 'multishotTargets':
+        return GameConfig.tower.baseMultishotCount + lvl * def.valuePerLevel;
+      case 'range': {
+        const effectiveLvl = def.maxLevel ? Math.min(lvl, def.maxLevel) : lvl;
+        return GameConfig.tower.baseRange + effectiveLvl * def.valuePerLevel;
+      }
+      case 'distanceDamage':
+        return (GameConfig.tower.baseDistanceDamageCoeff || 0.001) + lvl * def.valuePerLevel;
+      case 'maxHealth':
+        return GameConfig.tower.baseHealth + lvl * def.valuePerLevel;
+      case 'armorPercent':
+        return Math.min(0.85, GameConfig.tower.basePercentArmor + lvl * def.valuePerLevel);
+      case 'flatArmor':
+        return GameConfig.tower.baseFlatArmor + lvl * def.valuePerLevel;
+      case 'healthRegen':
+        return GameConfig.tower.baseRegen + lvl * def.valuePerLevel;
+      case 'killCashBonus':
+        return 1.0 + lvl * def.valuePerLevel;
+      case 'waveCashBonus':
+        return 1.0 + lvl * def.valuePerLevel;
+      default:
+        return 0;
+    }
+  }
+
+  buyUpgrade(upgradeId, world) {
+    const cost = this.getCost(upgradeId);
+    if (!isFinite(cost)) return false;
+
+    // Check credits on tower economy
+    const towers = world.getEntitiesWith(TowerComponent, EconomyComponent);
+    if (towers.length === 0) return false;
+
+    const towerId = towers[0];
+    const economy = world.getComponent(towerId, EconomyComponent);
+
+    if (economy.credits < cost) return false;
+
+    // Increment level
+    const currentLvl = this.getLevel(upgradeId);
+    this.levels.set(upgradeId, currentLvl + 1);
+
+    // Apply stats to component
+    this._applyToTower(upgradeId, world, towerId);
+
+    // Notify event bus
+    world.eventBus.emit('UPGRADE_PURCHASED', {
+      upgradeId,
+      cost,
+      newLevel: currentLvl + 1
+    });
+
+    return true;
+  }
+
+  _applyToTower(upgradeId, world, towerId) {
+    const attack = world.getComponent(towerId, AttackComponent);
+    const health = world.getComponent(towerId, HealthComponent);
+    const armor = world.getComponent(towerId, ArmorComponent);
+    const economy = world.getComponent(towerId, EconomyComponent);
+
+    const newVal = this.getCurrentValue(upgradeId);
+
+    switch (upgradeId) {
+      case 'damage':
+        if (attack) attack.damage = newVal;
+        break;
+      case 'attackSpeed':
+        if (attack) attack.attackSpeed = newVal;
+        break;
+      case 'critChance':
+        if (attack) attack.critChance = newVal;
+        break;
+      case 'critDamage':
+        if (attack) attack.critMultiplier = newVal;
+        break;
+      case 'multishotChance':
+        if (attack) attack.multishotChance = newVal;
+        break;
+      case 'multishotTargets':
+        if (attack) attack.multishotCount = newVal;
+        break;
+      case 'range':
+        if (attack) {
+          const maxScreenRange = (world && world.height) ? Math.floor((world.height / 2) - 20) : 290;
+          attack.range = Math.min(newVal, Math.max(GameConfig.tower.baseRange, maxScreenRange));
+        }
+        break;
+      case 'distanceDamage':
+        if (attack) attack.distanceBonus = newVal;
+        break;
+      case 'maxHealth':
+        if (health) {
+          const diff = newVal - health.max;
+          health.max = newVal;
+          health.current = Math.min(health.max, health.current + diff);
+        }
+        break;
+      case 'armorPercent':
+        if (armor) armor.percentReduction = newVal;
+        break;
+      case 'flatArmor':
+        if (armor) armor.flatReduction = newVal;
+        break;
+      case 'healthRegen':
+        if (health) health.regenRate = newVal;
+        break;
+      case 'killCashBonus':
+        if (economy) economy.killMultiplier = newVal;
+        break;
+      case 'waveCashBonus':
+        if (economy) economy.waveMultiplier = newVal;
+        break;
+    }
+  }
+
+  getAllUpgrades() {
+    return Object.values(GameConfig.upgrades).map(def => ({
+      ...def,
+      level: this.getLevel(def.id),
+      cost: this.getCost(def.id),
+      currentVal: this.getCurrentValue(def.id),
+      nextVal: this.getNextValue(def.id)
+    }));
+  }
+}
+
+
+  // ==================================================
+  // Source: src/ui/UIManager.js
+  // ==================================================
+/**
+ * UIManager.js
+ * Strictly isolated DOM UI manager.
+ * Handles HUD panels, upgrade tabs, target strategy selectors, game speed, and modals.
+ */
+
+class UIManager {
+  constructor(world, upgradeManager, audioSystem) {
+    this.world = world;
+    this.upgradeManager = upgradeManager;
+    this.audioSystem = audioSystem;
+
+    this.activeTab = 'offense'; // 'offense' | 'defense' | 'utility'
+
+    // DOM references
+    this.dom = {
+      waveText: document.getElementById('hud-wave'),
+      enemyText: document.getElementById('hud-enemies'),
+      creditsText: document.getElementById('hud-credits'),
+      hpBarFill: document.getElementById('hud-hp-fill'),
+      hpText: document.getElementById('hud-hp-text'),
+      
+      // Intermission countdown bar
+      intermissionContainer: document.getElementById('intermission-container'),
+      intermissionBar: document.getElementById('intermission-bar'),
+      intermissionText: document.getElementById('intermission-text'),
+
+      // Controls
+      speedBtn: document.getElementById('btn-speed'),
+      audioBtn: document.getElementById('btn-audio'),
+
+      // Strategy buttons
+      stratClosest: document.getElementById('strat-closest'),
+      stratStrongest: document.getElementById('strat-strongest'),
+      stratWeakest: document.getElementById('strat-weakest'),
+
+      // Upgrade tabs and list
+      tabOffense: document.getElementById('tab-offense'),
+      tabDefense: document.getElementById('tab-defense'),
+      tabUtility: document.getElementById('tab-utility'),
+      upgradesList: document.getElementById('upgrades-list'),
+
+      // Game over modal
+      modalGameOver: document.getElementById('modal-gameover'),
+      finalWaveText: document.getElementById('modal-final-wave'),
+      btnRestart: document.getElementById('btn-restart')
+    };
+
+    this.enemiesAlive = 0;
+    this.totalEnemies = 0;
+    this._wasRegenerating = false;
+    this._lastDisplayHp = null;
+    this._lastMaxHp = null;
+    this._lastRegenRate = null;
+  }
+
+  init() {
+    this._bindEvents();
+    this._subscribeWorldEvents();
+    this.renderUpgrades();
+    this.updateHUD();
+  }
+
+  _bindEvents() {
+    // 1. Tabs
+    this.dom.tabOffense?.addEventListener('click', () => this.switchTab('offense'));
+    this.dom.tabDefense?.addEventListener('click', () => this.switchTab('defense'));
+    this.dom.tabUtility?.addEventListener('click', () => this.switchTab('utility'));
+
+    // 2. Speed toggle (1x / 2x)
+    this.dom.speedBtn?.addEventListener('click', () => {
+      this.world.gameSpeed = this.world.gameSpeed === 1.0 ? 2.0 : 1.0;
+      if (this.dom.speedBtn) {
+        this.dom.speedBtn.textContent = `${this.world.gameSpeed}x`;
+        this.dom.speedBtn.classList.toggle('active', this.world.gameSpeed === 2.0);
+      }
+    });
+
+    // 3. Audio mute toggle
+    this.dom.audioBtn?.addEventListener('click', () => {
+      const isMuted = this.audioSystem.toggleMute();
+      if (this.dom.audioBtn) {
+        this.dom.audioBtn.textContent = isMuted ? '🔇' : '🔊';
+        this.dom.audioBtn.classList.toggle('muted', isMuted);
+      }
+    });
+
+    // 4. Target strategy switcher
+    const setStrategy = (strat) => {
+      const towers = this.world.getEntitiesWith(TowerComponent, TargetComponent);
+      if (towers.length > 0) {
+        const targetComp = this.world.getComponent(towers[0], TargetComponent);
+        if (targetComp) targetComp.strategy = strat;
+      }
+      this.dom.stratClosest?.classList.toggle('active', strat === 'closest');
+      this.dom.stratStrongest?.classList.toggle('active', strat === 'strongest');
+      this.dom.stratWeakest?.classList.toggle('active', strat === 'weakest');
+    };
+
+    this.dom.stratClosest?.addEventListener('click', () => setStrategy('closest'));
+    this.dom.stratStrongest?.addEventListener('click', () => setStrategy('strongest'));
+    this.dom.stratWeakest?.addEventListener('click', () => setStrategy('weakest'));
+
+    // 5. Restart button
+    this.dom.btnRestart?.addEventListener('click', () => {
+      this.world.eventBus.emit('RESTART_GAME');
+    });
+  }
+
+  _subscribeWorldEvents() {
+    // Intermission ticks
+    this.world.eventBus.on('INTERMISSION_TICK', (data) => {
+      if (this.dom.intermissionContainer) {
+        this.dom.intermissionContainer.classList.remove('hidden');
+      }
+      if (this.dom.intermissionBar) {
+        this.dom.intermissionBar.style.width = `${(data.progress * 100).toFixed(1)}%`;
+      }
+      if (this.dom.intermissionText) {
+        this.dom.intermissionText.textContent = `ПЕРЕРЫВ: ${data.remaining.toFixed(1)}s (ВОЛНА ${data.nextWave})`;
+      }
+    });
+
+    this.world.eventBus.on('WAVE_STARTED', (data) => {
+      if (this.dom.intermissionContainer) {
+        this.dom.intermissionContainer.classList.add('hidden');
+      }
+      if (this.dom.waveText) {
+        this.dom.waveText.textContent = `ВОЛНА ${String(data.wave).padStart(2, '0')}`;
+      }
+      this.totalEnemies = data.totalEnemies;
+      this.enemiesAlive = data.totalEnemies;
+      this._updateEnemiesCount();
+    });
+
+    this.world.eventBus.on('WAVE_PROGRESS', (data) => {
+      this.enemiesAlive = (data.total - data.spawned) + data.alive;
+      this._updateEnemiesCount();
+    });
+
+    this.world.eventBus.on('ENTITY_DIED', (data) => {
+      if (data.isEnemy) {
+        this.enemiesAlive = Math.max(0, this.enemiesAlive - 1);
+        this._updateEnemiesCount();
+      }
+    });
+
+    this.world.eventBus.on('CREDITS_CHANGED', (data) => {
+      if (this.dom.creditsText) {
+        this.dom.creditsText.textContent = `${data.credits.toLocaleString()} ◈`;
+        this.dom.creditsText.classList.remove('pulse');
+        void this.dom.creditsText.offsetWidth; // trigger reflow
+        this.dom.creditsText.classList.add('pulse');
+      }
+      this.renderUpgrades();
+    });
+
+    this.world.eventBus.on('UPGRADE_PURCHASED', () => {
+      this.renderUpgrades();
+      this.updateHUD();
+    });
+
+    this.world.eventBus.on('TOWER_DAMAGED', () => {
+      this.updateHUD();
+    });
+
+    this.world.eventBus.on('GAME_OVER', () => {
+      if (this.dom.modalGameOver) {
+        this.dom.modalGameOver.classList.remove('hidden');
+      }
+      if (this.dom.finalWaveText && this.dom.waveText) {
+        this.dom.finalWaveText.textContent = this.dom.waveText.textContent;
+      }
+    });
+  }
+
+  _updateEnemiesCount() {
+    if (this.dom.enemyText) {
+      this.dom.enemyText.textContent = `ВРАГИ: ${this.enemiesAlive}`;
+    }
+  }
+
+  switchTab(tabName) {
+    this.activeTab = tabName;
+    this.dom.tabOffense?.classList.toggle('active', tabName === 'offense');
+    this.dom.tabDefense?.classList.toggle('active', tabName === 'defense');
+    this.dom.tabUtility?.classList.toggle('active', tabName === 'utility');
+    this.renderUpgrades();
+  }
+
+  /**
+   * Frame-by-frame UI update for continuous metrics (like passive health regeneration).
+   */
+  update(deltaTime) {
+    const towers = this.world.getEntitiesWith(TowerComponent, HealthComponent);
+    if (towers.length === 0) return;
+
+    const health = this.world.getComponent(towers[0], HealthComponent);
+    if (!health) return;
+
+    // Continuously sync HUD while health is actively regenerating
+    if (health.current > 0 && health.current < health.max && health.regenRate > 0) {
+      this._updateHealthHUD(health);
+      this._wasRegenerating = true;
+    } else if (this._wasRegenerating) {
+      // Clamped back to full health: do clean final update
+      this._updateHealthHUD(health);
+      this._wasRegenerating = false;
+    }
+  }
+
+  _updateHealthHUD(health) {
+    if (!health) return;
+
+    const pct = Math.max(0, Math.min(100, (health.current / health.max) * 100));
+    const pctStr = `${pct.toFixed(1)}%`;
+    if (this.dom.hpBarFill && this.dom.hpBarFill.style.width !== pctStr) {
+      this.dom.hpBarFill.style.width = pctStr;
+    }
+
+    const displayCurrent = Math.min(health.max, Math.ceil(health.current));
+    if (this.dom.hpText && (this._lastDisplayHp !== displayCurrent || this._lastMaxHp !== health.max || this._lastRegenRate !== health.regenRate)) {
+      this._lastDisplayHp = displayCurrent;
+      this._lastMaxHp = health.max;
+      this._lastRegenRate = health.regenRate;
+      const regenText = health.regenRate > 0 ? ` (+${health.regenRate.toFixed(1)}/с)` : '';
+      this.dom.hpText.innerHTML = `<span style="color:#94a3b8; font-weight:700;">HP:</span> <strong>${displayCurrent}</strong> / ${health.max}${regenText ? `<span style="color:#00ff88; font-weight:800;">${regenText}</span>` : ''}`;
+    }
+  }
+
+  updateHUD() {
+    const towers = this.world.getEntitiesWith(TowerComponent, HealthComponent, EconomyComponent);
+    if (towers.length === 0) return;
+
+    const towerId = towers[0];
+    const health = this.world.getComponent(towerId, HealthComponent);
+    const economy = this.world.getComponent(towerId, EconomyComponent);
+
+    if (health) {
+      this._updateHealthHUD(health);
+    }
+
+    if (economy && this.dom.creditsText) {
+      this.dom.creditsText.textContent = `${economy.credits.toLocaleString()} ◈`;
+    }
+  }
+
+  renderUpgrades() {
+    if (!this.dom.upgradesList) return;
+
+    const towers = this.world.getEntitiesWith(TowerComponent, EconomyComponent);
+    const currentCredits = towers.length > 0 ? this.world.getComponent(towers[0], EconomyComponent).credits : 0;
+
+    const allUpgrades = this.upgradeManager.getAllUpgrades();
+    const filtered = allUpgrades.filter(u => u.category === this.activeTab);
+
+    this.dom.upgradesList.innerHTML = '';
+
+    for (const u of filtered) {
+      const isMax = u.maxLevel && u.level >= u.maxLevel;
+      const canAfford = !isMax && currentCredits >= u.cost;
+
+      const card = document.createElement('div');
+      card.className = `upgrade-card ${isMax ? 'maxed' : ''}`;
+
+      const formattedCurrent = u.format(u.currentVal);
+      const formattedNext = isMax ? 'MAX' : u.format(u.nextVal);
+
+      card.innerHTML = `
+        <div class="upgrade-header">
+          <span class="upgrade-title">${u.icon} ${u.name}</span>
+          <span class="upgrade-lvl">УР. ${u.level}${u.maxLevel ? `/${u.maxLevel}` : ''}</span>
+        </div>
+        <div class="upgrade-stats">
+          <span class="stat-current">${formattedCurrent}</span>
+          <span class="stat-arrow">➔</span>
+          <span class="stat-next">${formattedNext}</span>
+        </div>
+        <button class="upgrade-buy-btn ${!canAfford ? 'disabled' : ''}" ${!canAfford ? 'disabled' : ''}>
+          ${isMax ? 'МАКСИМУМ' : `КУПИТЬ: ${u.cost.toLocaleString()} ◈`}
+        </button>
+      `;
+
+      const buyBtn = card.querySelector('.upgrade-buy-btn');
+      if (buyBtn && !isMax) {
+        buyBtn.addEventListener('click', () => {
+          this.upgradeManager.buyUpgrade(u.id, this.world);
+        });
+      }
+
+      this.dom.upgradesList.appendChild(card);
+    }
+  }
+
+  hideGameOver() {
+    if (this.dom.modalGameOver) {
+      this.dom.modalGameOver.classList.add('hidden');
+    }
+  }
+}
+
+
+  // ==================================================
+  // Source: src/main.js
+  // ==================================================
+/**
+ * main.js
+ * Game entry point, ECS bootstrap, and main animation loop.
+ */
+
+// Components
+// Systems
+// Managers & UI
+class GameApp {
+  constructor() {
+    this.canvas = document.getElementById('game-canvas');
+    this.world = null;
+    this.upgradeManager = null;
+    this.uiManager = null;
+    this.waveSystem = null;
+    this.particleSystem = null;
+    this.audioSystem = null;
+
+    this.lastTime = 0;
+    this.animationFrameId = null;
+
+    this._init();
+  }
+
+  _init() {
+    this.audioSystem = new AudioSystem();
+    this._resizeCanvas();
+    window.addEventListener('resize', () => this._resizeCanvas());
+    this._startNewGame();
+  }
+
+  _resizeCanvas() {
+    const wrapper = document.getElementById('canvas-wrapper');
+    if (!wrapper || !this.canvas) return;
+
+    const width = wrapper.clientWidth || GameConfig.canvas.width;
+    const height = wrapper.clientHeight || GameConfig.canvas.height;
+
+    this.canvas.width = width;
+    this.canvas.height = height;
+
+    if (this.world) {
+      this.world.width = width;
+      this.world.height = height;
+
+      // Keep tower centered on resize and clamp range to canvas bounds
+      const towers = this.world.getEntitiesWith(TowerComponent, TransformComponent);
+      if (towers.length > 0) {
+        const trans = this.world.getComponent(towers[0], TransformComponent);
+        trans.x = width / 2;
+        trans.y = height / 2;
+
+        const attack = this.world.getComponent(towers[0], AttackComponent);
+        if (attack && this.upgradeManager) {
+          const upgradeVal = this.upgradeManager.getCurrentValue('range');
+          const maxScreenRange = Math.floor((height / 2) - 20);
+          attack.range = Math.min(upgradeVal, Math.max(GameConfig.tower.baseRange, maxScreenRange));
+        }
+      }
+    }
+  }
+
+  _startNewGame() {
+    if (this.animationFrameId) {
+      cancelAnimationFrame(this.animationFrameId);
+    }
+
+    // 1. Create World and Managers
+    this.world = new World();
+    this.world.width = this.canvas.width;
+    this.world.height = this.canvas.height;
+
+    this.upgradeManager = new UpgradeManager();
+    this.particleSystem = new ParticleSystem();
+    this.waveSystem = new WaveSystem();
+
+    // 2. Register Systems in strict architectural pipeline order
+    this.world.registerSystem(new MovementSystem());
+    this.world.registerSystem(new PhysicsSeparationSystem());
+    this.world.registerSystem(new TargetingSystem());
+    this.world.registerSystem(new SniperAISystem());
+    this.world.registerSystem(new WeaponSystem());
+    this.world.registerSystem(new CollisionSystem());
+    this.world.registerSystem(new DamageSystem());
+    this.world.registerSystem(this.waveSystem);
+    this.world.registerSystem(new EconomySystem());
+    this.world.registerSystem(this.particleSystem);
+    this.world.registerSystem(this.audioSystem);
+    this.world.registerSystem(new RenderSystem(this.canvas, this.particleSystem));
+
+    // 3. Create Central Tower Entity
+    this._createTowerEntity();
+
+    // 4. Initialize UI Manager
+    this.uiManager = new UIManager(this.world, this.upgradeManager, this.audioSystem);
+    this.uiManager.init();
+    this.uiManager.hideGameOver();
+
+    // 5. Start Wave 1 immediately with UI subscribed
+    this.waveSystem.startFirstWave(this.world);
+
+    // 6. Handle game restart events
+    this.world.eventBus.on('RESTART_GAME', () => {
+      this._startNewGame();
+    });
+
+    // 7. Start game loop
+    this.lastTime = performance.now();
+    this._loop = this._loop.bind(this);
+    this.animationFrameId = requestAnimationFrame(this._loop);
+  }
+
+  _createTowerEntity() {
+    const towerId = this.world.createEntity();
+    const centerX = this.world.width / 2;
+    const centerY = this.world.height / 2;
+    const towerCfg = GameConfig.tower;
+
+    this.world.addComponent(towerId, new TowerComponent());
+    this.world.addComponent(towerId, new TransformComponent(centerX, centerY, 0));
+    this.world.addComponent(towerId, new CircleColliderComponent(towerCfg.colliderRadius, 1000, true)); // isStatic: true
+    this.world.addComponent(towerId, new HealthComponent(towerCfg.baseHealth, towerCfg.baseHealth, towerCfg.baseRegen));
+    this.world.addComponent(towerId, new ArmorComponent(towerCfg.basePercentArmor, towerCfg.baseFlatArmor));
+    this.world.addComponent(towerId, new AttackComponent(
+      towerCfg.baseDamage,
+      towerCfg.baseAttackSpeed,
+      towerCfg.baseRange,
+      0,
+      towerCfg.baseCritChance,
+      towerCfg.baseCritMultiplier,
+      towerCfg.baseMultishotCount,
+      towerCfg.baseMultishotChance,
+      towerCfg.baseDistanceDamageCoeff || 0.001
+    ));
+    this.world.addComponent(towerId, new TargetComponent(null, 'closest'));
+    this.world.addComponent(towerId, new RenderComponent(
+      'tower',
+      8,
+      towerCfg.radius,
+      GameConfig.colors.tower,
+      GameConfig.colors.towerGlow,
+      14
+    ));
+    this.world.addComponent(towerId, new EconomyComponent(towerCfg.startCredits, 1.0, 1.0));
+
+    return towerId;
+  }
+
+  _loop(timestamp) {
+    const rawDelta = (timestamp - this.lastTime) / 1000;
+    this.lastTime = timestamp;
+
+    // Clamp delta time to prevent simulation spikes during tab changes
+    const deltaTime = Math.min(0.1, rawDelta);
+
+    this.world.update(deltaTime);
+    if (this.uiManager) {
+      this.uiManager.update(deltaTime);
+    }
+
+    this.animationFrameId = requestAnimationFrame(this._loop);
+  }
+}
+
+// Instantiate safely on DOM ready or immediately if already loaded
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', () => {
+    window.gameApp = new GameApp();
+  });
+} else {
+  window.gameApp = new GameApp();
+}
+
+
+})();
+
+</script>
+</body>
+</html>
