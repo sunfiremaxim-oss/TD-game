@@ -202,7 +202,15 @@ export class World {
    * @param {number} deltaTime In seconds
    */
   update(deltaTime) {
-    if (this.isPaused) return;
+    if (this.isPaused) {
+      // While paused, only run read-only render systems with 0 delta time
+      for (const system of this.systems) {
+        if (system.isRenderSystem || system.constructor.name === 'RenderSystem') {
+          system.update(this, 0);
+        }
+      }
+      return;
+    }
 
     const scaledDt = deltaTime * this.gameSpeed;
 

@@ -22,6 +22,7 @@ export class RenderSystem {
     this.gridOffset = 0;
     this.corePulseAngle = 0;
     this.radarRotation = 0;
+    this.isRenderSystem = true;
   }
 
   update(world, deltaTime) {
@@ -60,6 +61,57 @@ export class RenderSystem {
       this._drawShockwaves(ctx);
       this._drawFloatingTexts(ctx);
     }
+
+    // 7. If paused and not game over, draw cyberpunk pause indicator
+    if (world.isPaused && !world.isGameOver) {
+      this._drawPauseOverlay(ctx, width, height);
+    }
+  }
+
+  _drawPauseOverlay(ctx, width, height) {
+    ctx.save();
+    // Semi-transparent dark cinematic veil
+    ctx.fillStyle = 'rgba(6, 9, 18, 0.45)';
+    ctx.fillRect(0, 0, width, height);
+
+    // Glowing badge in top-center
+    const badgeW = 240;
+    const badgeH = 54;
+    const badgeX = (width - badgeW) / 2;
+    const badgeY = 32;
+
+    ctx.fillStyle = 'rgba(10, 16, 28, 0.88)';
+    ctx.strokeStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 16;
+    ctx.lineWidth = 2;
+
+    if (ctx.roundRect) {
+      ctx.beginPath();
+      ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 8);
+      ctx.fill();
+      ctx.stroke();
+    } else {
+      ctx.fillRect(badgeX, badgeY, badgeW, badgeH);
+      ctx.strokeRect(badgeX, badgeY, badgeW, badgeH);
+    }
+
+    // Title: ⏸ ПАУЗА
+    ctx.font = '900 18px Orbitron, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#00f3ff';
+    ctx.shadowColor = '#00f3ff';
+    ctx.shadowBlur = 12;
+    ctx.fillText('⏸ ПАУЗА', width / 2, badgeY + 20);
+
+    // Subtitle: [ ПРОБЕЛ / P ]
+    ctx.font = '700 11px Rajdhani, Orbitron, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.shadowBlur = 0;
+    ctx.fillText('НАЖМИТЕ ПРОБЕЛ / P ДЛЯ ИГРЫ', width / 2, badgeY + 40);
+
+    ctx.restore();
   }
 
   _drawGrid(ctx, width, height) {

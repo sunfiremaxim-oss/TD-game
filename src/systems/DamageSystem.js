@@ -149,6 +149,7 @@ export class DamageSystem {
 
       if (isTower) {
         world.isGameOver = true;
+        world.isPaused = true;
         world.eventBus.emit('GAME_OVER', {
           reason: 'TOWER_DESTROYED'
         });

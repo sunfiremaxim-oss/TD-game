@@ -31,6 +31,7 @@ export class UIManager {
       intermissionText: document.getElementById('intermission-text'),
 
       // Controls
+      btnPause: document.getElementById('btn-pause'),
       speedBtns: [
         document.getElementById('btn-speed-1') || document.getElementById('btn-speed'),
         document.getElementById('btn-speed-2'),
@@ -70,6 +71,7 @@ export class UIManager {
     this.renderUpgrades();
     this.updateHUD();
     this._updateAudioButtons();
+    this._updatePauseButton();
   }
 
   _bindEvents() {
@@ -78,7 +80,11 @@ export class UIManager {
     this.dom.tabDefense?.addEventListener('click', () => this.switchTab('defense'));
     this.dom.tabUtility?.addEventListener('click', () => this.switchTab('utility'));
 
-    // 2. Speed selector (1x / 2x / 3x)
+    // 2. Pause & Speed controls
+    this.dom.btnPause?.addEventListener('click', () => {
+      this.togglePause();
+    });
+
     this.dom.speedBtns.forEach((btn, index) => {
       const speed = parseFloat(btn.dataset.speed || (index + 1));
       btn.addEventListener('click', () => {
@@ -86,12 +92,19 @@ export class UIManager {
       });
     });
 
-    // Keyboard shortcuts: 1, 2, 3 for game speed
+    // Keyboard shortcuts: Space / P for pause, 1, 2, 3 for game speed
     window.addEventListener('keydown', (e) => {
       if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
-      if (e.key === '1') this.setGameSpeed(1.0);
-      else if (e.key === '2') this.setGameSpeed(2.0);
-      else if (e.key === '3') this.setGameSpeed(3.0);
+      if (e.code === 'Space' || e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
+        e.preventDefault();
+        this.togglePause();
+      } else if (e.key === '1') {
+        this.setGameSpeed(1.0);
+      } else if (e.key === '2') {
+        this.setGameSpeed(2.0);
+      } else if (e.key === '3') {
+        this.setGameSpeed(3.0);
+      }
     });
 
     // 3. Dual Audio Controls (SFX & BGM)
@@ -215,6 +228,8 @@ export class UIManager {
     });
 
     this.world.eventBus.on('GAME_OVER', () => {
+      this.world.isPaused = true;
+      this._updatePauseButton();
       if (this.dom.modalGameOver) {
         this.dom.modalGameOver.classList.remove('hidden');
       }
@@ -243,11 +258,28 @@ export class UIManager {
   }
 
   setGameSpeed(speed) {
+    if (this.world.isGameOver) return;
     this.world.gameSpeed = speed;
+    this.world.isPaused = false;
+    this._updatePauseButton();
     this.dom.speedBtns.forEach(btn => {
       const btnSpeed = parseFloat(btn.dataset.speed || '1');
       btn.classList.toggle('active', btnSpeed === speed);
     });
+  }
+
+  togglePause() {
+    if (this.world.isGameOver) return;
+    this.world.isPaused = !this.world.isPaused;
+    this._updatePauseButton();
+  }
+
+  _updatePauseButton() {
+    if (!this.dom.btnPause) return;
+    const isPaused = !!this.world.isPaused;
+    this.dom.btnPause.classList.toggle('active', isPaused);
+    this.dom.btnPause.title = isPaused ? 'Продолжить игру (Пробел / P)' : 'Пауза (Пробел / P)';
+    this.dom.btnPause.textContent = isPaused ? '▶' : '⏸';
   }
 
   _updateAudioButtons() {
@@ -373,5 +405,6 @@ export class UIManager {
     if (this.dom.modalGameOver) {
       this.dom.modalGameOver.classList.add('hidden');
     }
+    this._updatePauseButton();
   }
 }
