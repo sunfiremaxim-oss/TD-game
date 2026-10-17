@@ -20,6 +20,14 @@ export class UpgradeManager {
     }
   }
 
+  reset() {
+    this.levels.clear();
+    for (const key of Object.keys(GameConfig.upgrades)) {
+      this.levels.set(key, 0);
+    }
+  }
+
+
   getLevel(upgradeId) {
     return this.levels.get(upgradeId) || 0;
   }
@@ -178,7 +186,8 @@ export class UpgradeManager {
         break;
       case 'range':
         if (attack) {
-          const maxScreenRange = (world && world.height) ? Math.floor((world.height / 2) - 20) : 290;
+          const halfDim = (world && world.width && world.height) ? (Math.min(world.width, world.height) / 2) : 290;
+          const maxScreenRange = Math.floor(halfDim - 20);
           attack.range = Math.min(newVal, Math.max(GameConfig.tower.baseRange, maxScreenRange));
         }
         break;

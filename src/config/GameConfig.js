@@ -108,6 +108,7 @@ export const GameConfig = {
       baseDamage: 22,
       baseReward: 25,
       stopDistance: 240,    // Scaled for tighter base perimeter
+      aegisSeekDistance: 350, // Max distance to seek and escort a nearby Aegis fortress
       shootInterval: 2.8,   // Shoots every 2.8s
       initialAimDelay: 0.45, // Aiming delay before first shot so tower has reaction time
       projectileSpeed: 220,

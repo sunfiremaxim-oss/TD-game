@@ -72,6 +72,7 @@ export class DamageSystem {
       if (targetTrans) {
         let insideAegisDome = false;
         for (const aId of aegises) {
+          if (aId === targetId) continue; // Aegis only protects allies around it, not itself
           const aComp = world.getComponent(aId, EnemyComponent);
           if (aComp && aComp.type === 'aegis') {
             const aTrans = world.getComponent(aId, TransformComponent);

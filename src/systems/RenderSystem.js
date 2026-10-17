@@ -23,6 +23,8 @@ export class RenderSystem {
     this.corePulseAngle = 0;
     this.radarRotation = 0;
     this.isRenderSystem = true;
+
+    this._initParallaxSpace();
   }
 
   update(world, deltaTime) {
@@ -33,12 +35,16 @@ export class RenderSystem {
     this.corePulseAngle += deltaTime * 2.5;
     this.radarRotation += deltaTime * 0.6;
 
-    // 1. Clear background
-    ctx.fillStyle = GameConfig.colors.background;
-    ctx.fillRect(0, 0, width, height);
+    // Advance cosmic parallax drift (slow majestic drift across deep space)
+    this.spaceTime += deltaTime;
+    this.parallaxDriftX += deltaTime * 8.0;
+    this.parallaxDriftY += deltaTime * 4.0;
 
-    // 2. Draw animated cyber grid
-    this._drawGrid(ctx, width, height);
+    // 1. Draw Deep Cyber-Space with 3-Layer Parallax & Nebulae
+    this._drawSpaceBackground(ctx, width, height, world);
+
+    // 2. Draw tactical grids (strictly clipped to tower attack range and enemy shield domes)
+    this._drawTacticalGrids(ctx, world, width, height);
 
     // 3. Draw Tower range ring and tower entity
     this._drawTowerAndRange(ctx, world);
@@ -62,8 +68,8 @@ export class RenderSystem {
       this._drawFloatingTexts(ctx);
     }
 
-    // 7. If paused and not game over, draw cyberpunk pause indicator
-    if (world.isPaused && !world.isGameOver) {
+    // 7. If paused, not game over, and not in main menu, draw cyberpunk pause indicator
+    if (world.isPaused && !world.isGameOver && !world.inMenu) {
       this._drawPauseOverlay(ctx, width, height);
     }
   }
@@ -114,22 +120,337 @@ export class RenderSystem {
     ctx.restore();
   }
 
-  _drawGrid(ctx, width, height) {
+  _drawTacticalGrids(ctx, world, width, height) {
+    // 1. Draw tactical coordinate grid inside the tower's attack range circle
+    const towers = world.getEntitiesWith(TowerComponent, TransformComponent, AttackComponent);
+    if (towers.length > 0) {
+      const trans = world.getComponent(towers[0], TransformComponent);
+      const attack = world.getComponent(towers[0], AttackComponent);
+      if (attack && attack.range > 0) {
+        this._drawTowerGrid(ctx, trans.x, trans.y, attack.range);
+      }
+    }
+
+    // 2. Draw distinctive honeycomb shield grid inside each alive Aegis shield dome
+    const enemies = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
+    for (const id of enemies) {
+      const enemyComp = world.getComponent(id, EnemyComponent);
+      if (enemyComp && enemyComp.type === 'aegis') {
+        const health = world.getComponent(id, HealthComponent);
+        if (health && health.current > 0) {
+          const trans = world.getComponent(id, TransformComponent);
+          if (trans) {
+            const r = enemyComp.shieldDomeRadius || 115;
+            this._drawShieldHoneycombGrid(ctx, trans.x, trans.y, r);
+          }
+        }
+      }
+    }
+  }
+
+  _drawTowerGrid(ctx, cx, cy, range) {
     const gridSize = GameConfig.canvas.gridSize || 40;
     ctx.save();
-    ctx.strokeStyle = GameConfig.canvas.gridColor;
+
+    // Clip strictly to tower attack range
+    ctx.beginPath();
+    ctx.arc(cx, cy, range, 0, Math.PI * 2);
+    ctx.clip();
+
+    // Cyan tactical coordinate grid lines
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
     ctx.lineWidth = 1;
     ctx.beginPath();
 
-    for (let x = 0; x <= width; x += gridSize) {
-      ctx.moveTo(x, 0);
-      ctx.lineTo(x, height);
+    const minX = Math.floor((cx - range) / gridSize) * gridSize;
+    const maxX = Math.ceil((cx + range) / gridSize) * gridSize;
+    const minY = Math.floor((cy - range) / gridSize) * gridSize;
+    const maxY = Math.ceil((cy + range) / gridSize) * gridSize;
+
+    for (let x = minX; x <= maxX; x += gridSize) {
+      ctx.moveTo(x, cy - range);
+      ctx.lineTo(x, cy + range);
     }
-    for (let y = 0; y <= height; y += gridSize) {
-      ctx.moveTo(0, y);
-      ctx.lineTo(width, y);
+    for (let y = minY; y <= maxY; y += gridSize) {
+      ctx.moveTo(cx - range, y);
+      ctx.lineTo(cx + range, y);
     }
     ctx.stroke();
+
+    // Subtle tactical intersection crosses (+)
+    ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
+    for (let x = minX; x <= maxX; x += gridSize) {
+      for (let y = minY; y <= maxY; y += gridSize) {
+        if (Math.hypot(x - cx, y - cy) <= range - 2) {
+          ctx.fillRect(x - 2, y, 5, 1);
+          ctx.fillRect(x, y - 2, 1, 5);
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawShieldHoneycombGrid(ctx, cx, cy, radius) {
+    ctx.save();
+
+    // Clip strictly to shield dome circle
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+
+    const hexR = 18;
+    const dx = Math.sqrt(3) * hexR;
+    const dy = 1.5 * hexR;
+
+    ctx.strokeStyle = 'rgba(0, 255, 170, 0.16)';
+    ctx.lineWidth = 1;
+
+    const minRow = Math.floor(-radius / dy) - 1;
+    const maxRow = Math.ceil(radius / dy) + 1;
+    const minCol = Math.floor(-radius / dx) - 1;
+    const maxCol = Math.ceil(radius / dx) + 1;
+
+    for (let row = minRow; row <= maxRow; row++) {
+      const y = cy + row * dy;
+      const xOffset = (row % 2 !== 0) ? dx * 0.5 : 0;
+      for (let col = minCol; col <= maxCol; col++) {
+        const x = cx + col * dx + xOffset;
+        if (Math.hypot(x - cx, y - cy) <= radius + hexR) {
+          this._drawHexagonPath(ctx, x, y, hexR * 0.90);
+          ctx.stroke();
+        }
+      }
+    }
+
+    ctx.restore();
+  }
+
+  _drawHexagonPath(ctx, cx, cy, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+      const a = (i * Math.PI) / 3;
+      const x = cx + r * Math.cos(a);
+      const y = cy + r * Math.sin(a);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+
+  _initParallaxSpace() {
+    this.spaceTime = 0;
+    this.parallaxDriftX = 0;
+    this.parallaxDriftY = 0;
+
+    // Layer 1: Distant micro-stars (deep space backdrop)
+    this.distantStars = [];
+    for (let i = 0; i < 95; i++) {
+      this.distantStars.push({
+        x: Math.random() * 2400,
+        y: Math.random() * 1600,
+        size: Math.random() * 1.3 + 0.6,
+        alpha: Math.random() * 0.45 + 0.25,
+        twinkleSpeed: Math.random() * 1.5 + 0.8,
+        twinklePhase: Math.random() * Math.PI * 2,
+        color: Math.random() < 0.6 ? '#ffffff' : (Math.random() < 0.5 ? '#a5f3fc' : '#c084fc')
+      });
+    }
+
+    // Layer 2: Mid-distance geometric stars (diamonds, crosses, clusters)
+    this.midStars = [];
+    for (let i = 0; i < 42; i++) {
+      const type = Math.random() < 0.45 ? 'diamond' : (Math.random() < 0.45 ? 'cross' : 'dot');
+      this.midStars.push({
+        x: Math.random() * 2400,
+        y: Math.random() * 1600,
+        size: Math.random() * 2.2 + 1.8,
+        alpha: Math.random() * 0.45 + 0.45,
+        twinkleSpeed: Math.random() * 2.0 + 1.2,
+        twinklePhase: Math.random() * Math.PI * 2,
+        color: Math.random() < 0.55 ? '#00f3ff' : (Math.random() < 0.6 ? '#00ffcc' : '#f472b6'),
+        type
+      });
+    }
+
+    // Predefined geometric constellation connections between nearby mid-stars
+    this.constellations = [];
+    for (let i = 0; i < this.midStars.length; i++) {
+      for (let j = i + 1; j < this.midStars.length; j++) {
+        const dx = this.midStars[i].x - this.midStars[j].x;
+        const dy = this.midStars[i].y - this.midStars[j].y;
+        const d = Math.hypot(dx, dy);
+        if (d > 70 && d < 180 && this.constellations.length < 20) {
+          this.constellations.push([i, j]);
+        }
+      }
+    }
+
+    // Layer 3: Foreground cyber-motes (drifting space dust / energy motes)
+    this.foregroundMotes = [];
+    for (let i = 0; i < 20; i++) {
+      this.foregroundMotes.push({
+        x: Math.random() * 2400,
+        y: Math.random() * 1600,
+        size: Math.random() * 2.5 + 2.0,
+        alpha: Math.random() * 0.35 + 0.45,
+        pulseSpeed: Math.random() * 2.2 + 1.0,
+        pulsePhase: Math.random() * Math.PI * 2,
+        color: Math.random() < 0.65 ? '#00f3ff' : '#ffe600'
+      });
+    }
+
+    // Nebulae: 3 cosmic color clouds with slow orbital drift
+    this.nebulae = [
+      {
+        baseX: 0.28,
+        baseY: 0.32,
+        radius: 480,
+        color: 'rgba(0, 180, 216, 0.055)',
+        accent: 'rgba(0, 243, 255, 0.015)',
+        phase: 0
+      },
+      {
+        baseX: 0.72,
+        baseY: 0.68,
+        radius: 520,
+        color: 'rgba(147, 51, 234, 0.048)',
+        accent: 'rgba(217, 70, 239, 0.012)',
+        phase: 2.1
+      },
+      {
+        baseX: 0.50,
+        baseY: 0.50,
+        radius: 380,
+        color: 'rgba(6, 78, 119, 0.06)',
+        accent: 'rgba(0, 243, 255, 0.02)',
+        phase: 4.2
+      }
+    ];
+  }
+
+  _drawSpaceBackground(ctx, width, height, world) {
+    ctx.save();
+
+    // 1. Deep cosmic void
+    ctx.fillStyle = '#050711';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. Cosmic nebulae clouds (slow breathing radial gradients)
+    for (const neb of this.nebulae) {
+      const nebX = (neb.baseX * width + Math.sin(this.spaceTime * 0.2 + neb.phase) * 60 - this.parallaxDriftX * 0.15);
+      const nebY = (neb.baseY * height + Math.cos(this.spaceTime * 0.18 + neb.phase) * 45 - this.parallaxDriftY * 0.15);
+      const wrapX = ((nebX % width) + width) % width;
+      const wrapY = ((nebY % height) + height) % height;
+
+      const r = neb.radius + Math.sin(this.spaceTime * 0.35 + neb.phase) * 35;
+      const grad = ctx.createRadialGradient(wrapX, wrapY, r * 0.05, wrapX, wrapY, r);
+      grad.addColorStop(0, neb.color);
+      grad.addColorStop(0.65, neb.accent);
+      grad.addColorStop(1, 'rgba(5, 7, 17, 0)');
+
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(wrapX, wrapY, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 3. Layer 1: Distant Micro-Stars (Parallax factor: 0.35)
+    const drift1X = this.parallaxDriftX * 0.35;
+    const drift1Y = this.parallaxDriftY * 0.35;
+    for (const s of this.distantStars) {
+      const x = ((s.x - drift1X) % width + width) % width;
+      const y = ((s.y - drift1Y) % height + height) % height;
+      const twinkle = 0.7 + 0.3 * Math.sin(this.spaceTime * s.twinkleSpeed + s.twinklePhase);
+      ctx.globalAlpha = Math.max(0.1, Math.min(1, s.alpha * twinkle));
+      ctx.fillStyle = s.color;
+      ctx.fillRect(x, y, s.size, s.size);
+    }
+
+    // 4. Layer 2: Mid-Distance Geometric Stars & Constellations (Parallax factor: 0.70)
+    const drift2X = this.parallaxDriftX * 0.70;
+    const drift2Y = this.parallaxDriftY * 0.70;
+
+    // Draw faint constellation links between nearby stars
+    ctx.lineWidth = 0.8;
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
+    for (const [i, j] of this.constellations) {
+      const s1 = this.midStars[i];
+      const s2 = this.midStars[j];
+      const x1 = ((s1.x - drift2X) % width + width) % width;
+      const y1 = ((s1.y - drift2Y) % height + height) % height;
+      const x2 = ((s2.x - drift2X) % width + width) % width;
+      const y2 = ((s2.y - drift2Y) % height + height) % height;
+
+      // Only draw line if stars haven't wrapped across opposite screen boundaries
+      if (Math.abs(x1 - x2) < 220 && Math.abs(y1 - y2) < 220) {
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+    }
+
+    // Draw mid-distance stars (diamonds, crosses, glowing dots)
+    for (const s of this.midStars) {
+      const x = ((s.x - drift2X) % width + width) % width;
+      const y = ((s.y - drift2Y) % height + height) % height;
+      const twinkle = 0.65 + 0.35 * Math.sin(this.spaceTime * s.twinkleSpeed + s.twinklePhase);
+      const alpha = Math.max(0.15, Math.min(1, s.alpha * twinkle));
+
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = s.color;
+      ctx.strokeStyle = s.color;
+
+      if (s.type === 'diamond') {
+        // 4-pointed diamond spark
+        const r = s.size;
+        ctx.beginPath();
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r * 0.65, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r * 0.65, y);
+        ctx.closePath();
+        ctx.fill();
+      } else if (s.type === 'cross') {
+        // 4-pointed cross star flare
+        const arm = s.size * 1.3;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x - arm, y);
+        ctx.lineTo(x + arm, y);
+        ctx.moveTo(x, y - arm);
+        ctx.lineTo(x, y + arm);
+        ctx.stroke();
+        ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+      } else {
+        // Glowing dot
+        ctx.beginPath();
+        ctx.arc(x, y, s.size * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // 5. Layer 3: Foreground Cyber Motes (Parallax factor: 1.25)
+    const drift3X = this.parallaxDriftX * 1.25;
+    const drift3Y = this.parallaxDriftY * 1.25;
+    for (const m of this.foregroundMotes) {
+      const x = ((m.x - drift3X) % width + width) % width;
+      const y = ((m.y - drift3Y) % height + height) % height;
+      const pulse = 0.65 + 0.35 * Math.sin(this.spaceTime * m.pulseSpeed + m.pulsePhase);
+      const alpha = Math.max(0.1, Math.min(1, m.alpha * pulse));
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = m.color;
+      ctx.shadowColor = m.color;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc(x, y, m.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
     ctx.restore();
   }
 
@@ -187,7 +508,7 @@ export class RenderSystem {
     ctx.fill();
     ctx.restore();
 
-    // 5. Weapon turret barrel pointing towards rotation
+    // 5. Weapon turret barrel pointing towards rotation (single railgun cannon)
     ctx.rotate(trans.rotation);
     ctx.fillStyle = '#102233';
     ctx.strokeStyle = '#00f3ff';
@@ -195,23 +516,32 @@ export class RenderSystem {
     ctx.shadowColor = '#00f3ff';
     ctx.shadowBlur = 10;
 
-    // Dual railgun barrels
+    // Single centered railgun barrel
     const barrelLength = render.radius + 14;
-    const barrelWidth = 4;
-    const barrelGap = 5;
+    const barrelWidth = 6;
+    const halfWidth = barrelWidth / 2;
 
-    // Left barrel
-    ctx.fillRect(4, -barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
-    ctx.strokeRect(4, -barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+    // Turret barrel mount / shroud
+    ctx.fillStyle = '#0a1622';
+    ctx.fillRect(4, -halfWidth - 2, 12, barrelWidth + 4);
+    ctx.strokeRect(4, -halfWidth - 2, 12, barrelWidth + 4);
 
-    // Right barrel
-    ctx.fillRect(4, barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
-    ctx.strokeRect(4, barrelGap - barrelWidth / 2, barrelLength, barrelWidth);
+    // Main central barrel
+    ctx.fillStyle = '#102233';
+    ctx.fillRect(8, -halfWidth, barrelLength - 8, barrelWidth);
+    ctx.strokeRect(8, -halfWidth, barrelLength - 8, barrelWidth);
 
-    // Muzzle capacitor
+    // Inner glowing rail energy core line along center
+    ctx.strokeStyle = 'rgba(0, 243, 255, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(10, 0);
+    ctx.lineTo(barrelLength - 2, 0);
+    ctx.stroke();
+
+    // Muzzle capacitor tip
     ctx.fillStyle = '#00f3ff';
-    ctx.fillRect(barrelLength - 2, -barrelGap - barrelWidth / 2, 4, barrelWidth);
-    ctx.fillRect(barrelLength - 2, barrelGap - barrelWidth / 2, 4, barrelWidth);
+    ctx.fillRect(barrelLength - 3, -halfWidth - 1, 5, barrelWidth + 2);
 
     ctx.restore();
     ctx.restore();
@@ -404,47 +734,74 @@ export class RenderSystem {
         const r = enemyComp.shieldDomeRadius || 115;
 
         ctx.save();
-        // 1. Radial gradient defense field
+        // 1. Emerald-mint radial gradient forcefield aura (clearly distinct from cyan radar)
         const grad = ctx.createRadialGradient(trans.x, trans.y, r * 0.15, trans.x, trans.y, r);
-        grad.addColorStop(0, 'rgba(0, 229, 255, 0.02)');
-        grad.addColorStop(0.7, 'rgba(0, 229, 255, 0.08)');
-        grad.addColorStop(1, 'rgba(0, 229, 255, 0.20)');
+        grad.addColorStop(0, 'rgba(0, 255, 170, 0.02)');
+        grad.addColorStop(0.7, 'rgba(0, 255, 170, 0.08)');
+        grad.addColorStop(1, 'rgba(0, 255, 170, 0.22)');
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.arc(trans.x, trans.y, r, 0, Math.PI * 2);
         ctx.fill();
 
-        // 2. Animated outer tech ring
-        ctx.strokeStyle = '#00e5ff';
-        ctx.shadowColor = '#00e5ff';
-        ctx.shadowBlur = 12;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([10, 8, 4, 8]);
-        ctx.lineDashOffset = -this.radarRotation * 30;
+        // 2. Oscillating plasma wave perimeter (shimmering energy bubble)
         ctx.beginPath();
-        ctx.arc(trans.x, trans.y, r, 0, Math.PI * 2);
+        const segments = 60;
+        for (let i = 0; i <= segments; i++) {
+          const a = (i / segments) * Math.PI * 2;
+          const wave = Math.sin(a * 10 + this.spaceTime * 4.5) * 2.4;
+          const px = trans.x + Math.cos(a) * (r + wave);
+          const py = trans.y + Math.sin(a) * (r + wave);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = '#00ffaa';
+        ctx.shadowColor = '#00ffaa';
+        ctx.shadowBlur = 14;
+        ctx.lineWidth = 2.2;
         ctx.stroke();
 
-        // 3. Counter-rotating inner ring
-        ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
-        ctx.shadowBlur = 4;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([16, 16]);
-        ctx.lineDashOffset = this.radarRotation * 20;
+        // 3. Counter-rotating inner energy ring
+        ctx.strokeStyle = 'rgba(0, 255, 170, 0.40)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([12, 10]);
+        ctx.lineDashOffset = this.spaceTime * 25;
         ctx.beginPath();
         ctx.arc(trans.x, trans.y, r - 5, 0, Math.PI * 2);
         ctx.stroke();
-
         ctx.setLineDash([]);
 
-        // 4. Subtle Aegis status badge
-        ctx.font = '900 9px Orbitron, sans-serif';
+        // 4. 5 Shield Emitter Nodes at pentagon vertices
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowColor = '#00ffaa';
+        ctx.shadowBlur = 10;
+        for (let i = 0; i < 5; i++) {
+          const a = trans.rotation + (i * Math.PI * 2) / 5;
+          const nx = trans.x + Math.cos(a) * r;
+          const ny = trans.y + Math.sin(a) * r;
+
+          ctx.beginPath();
+          ctx.arc(nx, ny, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Faint energy conduit line to center pentagon
+          ctx.strokeStyle = 'rgba(0, 255, 170, 0.18)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(trans.x, trans.y);
+          ctx.lineTo(nx, ny);
+          ctx.stroke();
+        }
+
+        // 5. Shield Status Badge
+        ctx.font = '900 10px Orbitron, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#00e5ff';
-        ctx.shadowColor = '#00e5ff';
-        ctx.shadowBlur = 6;
-        ctx.fillText('AEGIS FIELD -50%', trans.x, trans.y - r - 8);
+        ctx.fillStyle = '#00ffaa';
+        ctx.shadowColor = '#00ffaa';
+        ctx.shadowBlur = 8;
+        ctx.fillText('🛡️ ЩИТ: -50% УРОНА', trans.x, trans.y - r - 10);
 
         ctx.restore();
       }

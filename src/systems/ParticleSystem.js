@@ -8,7 +8,15 @@ export class ParticleSystem {
     this.particles = [];
     this.shockwaves = [];
     this.floatingTexts = [];
+    this.isParticleSystem = true;
   }
+
+  reset() {
+    this.particles = [];
+    this.shockwaves = [];
+    this.floatingTexts = [];
+  }
+
 
   init(world) {
     // 1. Damage dealt: hit sparks only (no screen-cluttering damage numbers)
@@ -70,6 +78,11 @@ export class ParticleSystem {
     // 3. Sniper muzzle flare or shot effect
     world.eventBus.on('ENEMY_SNIPER_SHOT', (event) => {
       this._spawnDamageSparks(event.x, event.y, '#ff7700', 6);
+    });
+
+    // 4. Blinker teleport dash: electric lightning trail + dual shockwaves
+    world.eventBus.on('BLINKER_DASH', (event) => {
+      this._spawnBlinkerDashTrail(event.fromX, event.fromY, event.toX, event.toY);
     });
   }
 
@@ -148,6 +161,54 @@ export class ParticleSystem {
         color,
         life: 0.45 + Math.random() * 0.35,
         maxLife: 0.8
+      });
+    }
+  }
+
+  _spawnBlinkerDashTrail(fromX, fromY, toX, toY) {
+    // 1. Expanding shockwave ring at dash origin
+    this.shockwaves.push({
+      x: fromX,
+      y: fromY,
+      radius: 4,
+      maxRadius: 28,
+      color: '#00f3ff',
+      lineWidth: 2.5,
+      life: 0.35,
+      maxLife: 0.35
+    });
+
+    // 2. Expanding shockwave ring at dash destination
+    this.shockwaves.push({
+      x: toX,
+      y: toY,
+      radius: 4,
+      maxRadius: 24,
+      color: '#ffffff',
+      lineWidth: 2.5,
+      life: 0.35,
+      maxLife: 0.35
+    });
+
+    // 3. Lightning electric spark trail along the teleport vector
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const steps = 12;
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const px = fromX + dx * t + (Math.random() - 0.5) * 10;
+      const py = fromY + dy * t + (Math.random() - 0.5) * 10;
+      this.particles.push({
+        x: px,
+        y: py,
+        vx: (Math.random() - 0.5) * 40,
+        vy: (Math.random() - 0.5) * 40,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 12,
+        size: 2.2 + Math.random() * 2.0,
+        color: Math.random() < 0.55 ? '#ffffff' : '#00f3ff',
+        life: 0.25 + Math.random() * 0.15,
+        maxLife: 0.4
       });
     }
   }

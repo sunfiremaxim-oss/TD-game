@@ -24,6 +24,7 @@ export class World {
     this.isPaused = false;
     this.gameSpeed = 1.0;
     this.isGameOver = false;
+    this.inMenu = false;
 
     // Viewport dimensions
     this.width = 1200;

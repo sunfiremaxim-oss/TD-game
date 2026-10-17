@@ -72,8 +72,10 @@ bundledHtml = bundledHtml.replace(
   `<script>\n${bundledJs}\n</script>`
 );
 
-const outFile = path.join(outDir, 'index_test.html');
+const targetFileName = process.argv[2] || 'index_test.html';
+const outFile = path.join(outDir, targetFileName);
 fs.writeFileSync(outFile, bundledHtml, 'utf8');
+
 
 // Copy music folder to test_builds/music so standalone build has audio available
 const musicSrcDir = path.join(__dirname, 'music');

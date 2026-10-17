@@ -24,101 +24,369 @@ export class AudioSystem {
       'music/background_music_1.mp3',
       'music/background_music_2.mp3'
     ];
-    this.currentTrackIndex = 0;
-    this.bgmAudio = null;
+    this.currentTrackIndex = -1;
+    this._shuffledQueue = [];
+    this._lastRestartTime = 0;
+
+    // Dual-player seamless crossfade engine
+    this.playerA = null;
+    this.playerB = null;
+    this.activePlayerKey = 'A'; // 'A' or 'B'
+    this._isCrossfading = false;
+    this._crossfadeDuration = 3.5; // 3.5s smooth crossfade
+    this._crossfadeProgress = 0;
+    this._crossfadeInterval = null;
+
     this.isPlayingBGM = false;
     this.isBgmUnlocked = false;
 
     this._windowListenersAttached = false;
+    this._lastPickedIndex = -1;
     this._fallbackTried = false;
     this.world = null;
+
+    // Focus & visibility loss tracking (Yandex Games requirement: mute on blur)
+    this._focusListenersAttached = false;
+    this._isMutedByLossOfFocus = false;
+    this._audioCtxWasRunning = false;
+    this._bgmWasPlayingBeforeBlur = false;
+    this._setupFocusListeners();
   }
 
   // =========================================================================
-  // BACKGROUND MUSIC (BGM) PIPELINE
+  // BACKGROUND MUSIC (BGM) DUAL-PLAYER CROSSFADE PIPELINE
   // =========================================================================
 
+  get bgmAudio() {
+    return this._getActiveAudio();
+  }
+
+  _getActiveAudio() {
+    return this.activePlayerKey === 'A' ? this.playerA : this.playerB;
+  }
+
+  _getInactiveAudio() {
+    return this.activePlayerKey === 'A' ? this.playerB : this.playerA;
+  }
+
+  _getTargetBgmVolume() {
+    if (this.bgmMuted || this.bgmVolumeFactor <= 0) return 0;
+    return this.baseBgmVolume * this.bgmVolumeFactor;
+  }
+
+  _getNextRandomTrackIndex() {
+    if (!this.tracks || this.tracks.length === 0) return 0;
+    if (this.tracks.length === 1) return 0;
+
+    // With 2 tracks, strictly alternate so neither ever repeats twice in a row
+    if (this.tracks.length === 2) {
+      const next = this.currentTrackIndex === 0 ? 1 : 0;
+      this._lastPickedIndex = next;
+      return next;
+    }
+
+    // With 3+ tracks, use shuffle bag without back-to-back repeats
+    const lastIdx = this._lastPickedIndex !== -1 ? this._lastPickedIndex : this.currentTrackIndex;
+    if (this._shuffledQueue.length === 0) {
+      const indices = this.tracks.map((_, i) => i);
+      for (let i = indices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indices[i], indices[j]] = [indices[j], indices[i]];
+      }
+      if (indices[0] === lastIdx && indices.length > 1) {
+        const swapIdx = Math.floor(Math.random() * (indices.length - 1)) + 1;
+        [indices[0], indices[swapIdx]] = [indices[swapIdx], indices[0]];
+      }
+      this._shuffledQueue = indices;
+    }
+    const next = this._shuffledQueue.shift();
+    this._lastPickedIndex = next;
+    return next;
+  }
+
   _initBGM() {
-    if (this.bgmAudio || typeof Audio === 'undefined') return;
+    if (this.playerA || typeof Audio === 'undefined') return;
 
-    this.bgmAudio = new Audio();
-    this.bgmAudio.preload = 'auto';
-    this.bgmAudio.loop = false; // Alternated on 'ended' event
+    this.playerA = new Audio();
+    this.playerA.preload = 'auto';
+    this.playerA.loop = false;
+
+    this.playerB = new Audio();
+    this.playerB.preload = 'auto';
+    this.playerB.loop = false;
+
+    this._setupPlayerEvents(this.playerA, 'A');
+    this._setupPlayerEvents(this.playerB, 'B');
+
+    if (this.currentTrackIndex === -1) {
+      this.currentTrackIndex = Math.floor(Math.random() * this.tracks.length);
+      this._lastPickedIndex = this.currentTrackIndex;
+    }
+    this.playerA.src = this.tracks[this.currentTrackIndex];
     this._updateBgmVolume();
+  }
 
-    // Alternate tracks on track end and loop indefinitely
-    this.bgmAudio.addEventListener('ended', () => {
-      this.currentTrackIndex = (this.currentTrackIndex + 1) % this.tracks.length;
-      this._loadAndPlayTrack();
-    });
+  _setupPlayerEvents(player, key) {
+    // Crossfade trigger near track ending
+    player.addEventListener('timeupdate', () => {
+      if (this.activePlayerKey !== key) return;
+      if (this._isCrossfading) return;
+      if (!this.isPlayingBGM || this.bgmMuted || this.bgmVolumeFactor <= 0) return;
+      if (this.world && (this.world.inMenu || this.world.isPaused)) return;
 
-    // Fallback if relative path requires traversal (e.g. launched from subfolder)
-    this.bgmAudio.addEventListener('error', () => {
-      if (!this._fallbackTried) {
-        this._fallbackTried = true;
-        this.tracks = this.tracks.map(t => t.startsWith('../') ? t.slice(3) : '../' + t);
-        this._loadAndPlayTrack();
+      if (player.duration && player.duration > 0 && player.currentTime > 0) {
+        const timeLeft = player.duration - player.currentTime;
+        if (timeLeft <= this._crossfadeDuration && timeLeft > 0) {
+          this._startCrossfade(false);
+        }
       }
     });
 
-    this._loadTrack(this.currentTrackIndex);
+    // Fallback if crossfade didn't trigger (e.g. unknown duration or sudden end)
+    player.addEventListener('ended', () => {
+      if (this.activePlayerKey === key) {
+        this._startCrossfade(true);
+      }
+    });
+
+    // Path traversal fallback
+    player.addEventListener('error', () => {
+      if (!this._fallbackTried) {
+        this._fallbackTried = true;
+        this.tracks = this.tracks.map(t => t.startsWith('../') ? t.slice(3) : '../' + t);
+        const active = this._getActiveAudio();
+        if (active && this.isPlayingBGM && !this.bgmMuted) {
+          active.src = this.tracks[this.currentTrackIndex];
+          if (!this.world || (!this.world.inMenu && !this.world.isPaused)) {
+            active.play().catch(() => {});
+          }
+        }
+      }
+    });
   }
 
-  _loadTrack(index) {
-    if (!this.bgmAudio) return;
-    this.bgmAudio.src = this.tracks[index];
-    this._updateBgmVolume();
-  }
+  _startCrossfade(immediate = false) {
+    if (this._isCrossfading) return;
+    if (this.world && this.world.inMenu) return; // Strict: no BGM in main menu
 
-  _loadAndPlayTrack() {
-    this._loadTrack(this.currentTrackIndex);
-    if (!this.bgmMuted && this.isPlayingBGM && this.bgmAudio) {
-      this.bgmAudio.play().catch(() => {});
+    this._isCrossfading = true;
+    const currentAudio = this._getActiveAudio();
+    const nextKey = this.activePlayerKey === 'A' ? 'B' : 'A';
+    const nextAudio = nextKey === 'A' ? this.playerA : this.playerB;
+
+    this.currentTrackIndex = this._getNextRandomTrackIndex();
+    nextAudio.src = this.tracks[this.currentTrackIndex];
+    try { nextAudio.currentTime = 0; } catch (e) {}
+
+    const targetVol = this._getTargetBgmVolume();
+
+    if (immediate) {
+      if (this._crossfadeInterval) {
+        clearInterval(this._crossfadeInterval);
+        this._crossfadeInterval = null;
+      }
+      if (currentAudio) {
+        currentAudio.pause();
+        try { currentAudio.currentTime = 0; } catch (e) {}
+        currentAudio.volume = 0;
+      }
+
+      nextAudio.volume = targetVol;
+      this.activePlayerKey = nextKey;
+      this._isCrossfading = false;
+      this._crossfadeProgress = 0;
+
+      if (this.isPlayingBGM && !this.bgmMuted && this.bgmVolumeFactor > 0) {
+        if (!this.world || (!this.world.isPaused && !this.world.inMenu)) {
+          nextAudio.play().catch(() => {});
+        }
+      }
+      return;
     }
+
+    nextAudio.volume = 0;
+    if (this.isPlayingBGM && !this.bgmMuted && this.bgmVolumeFactor > 0) {
+      if (!this.world || (!this.world.isPaused && !this.world.inMenu)) {
+        const p = nextAudio.play();
+        if (p !== undefined) p.catch(() => {});
+      }
+    }
+
+    const startTime = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+    const durationMs = this._crossfadeDuration * 1000;
+
+    if (this._crossfadeInterval) {
+      clearInterval(this._crossfadeInterval);
+      this._crossfadeInterval = null;
+    }
+
+    this._crossfadeInterval = setInterval(() => {
+      const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const elapsed = now - startTime;
+      const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+      this._crossfadeProgress = progress;
+
+      const curTarget = this._getTargetBgmVolume();
+      // Equal-power crossfade curve for constant perceived loudness
+      const outVol = curTarget * Math.cos(progress * 0.5 * Math.PI);
+      const inVol = curTarget * Math.sin(progress * 0.5 * Math.PI);
+
+      if (currentAudio) {
+        currentAudio.volume = Math.max(0, Math.min(1, outVol));
+      }
+      if (nextAudio) {
+        nextAudio.volume = Math.max(0, Math.min(1, inVol));
+      }
+
+      if (progress >= 1) {
+        clearInterval(this._crossfadeInterval);
+        this._crossfadeInterval = null;
+
+        if (currentAudio) {
+          currentAudio.pause();
+          try { currentAudio.currentTime = 0; } catch (e) {}
+          currentAudio.volume = 0;
+        }
+
+        nextAudio.volume = curTarget;
+        this.activePlayerKey = nextKey;
+        this._isCrossfading = false;
+        this._crossfadeProgress = 0;
+      }
+    }, 40);
   }
 
   _updateBgmVolume() {
-    if (!this.bgmAudio) return;
-    const effectiveVol = this.bgmMuted ? 0 : (this.baseBgmVolume * this.bgmVolumeFactor);
-    this.bgmAudio.volume = Math.max(0, Math.min(1, effectiveVol));
-    this.bgmAudio.muted = this.bgmMuted || this.bgmVolumeFactor === 0;
+    const targetVol = this._getTargetBgmVolume();
+    const active = this._getActiveAudio();
+    const other = this._getInactiveAudio();
 
-    if (!this.bgmMuted && this.bgmVolumeFactor > 0 && this.isPlayingBGM && this.bgmAudio.paused) {
-      this.bgmAudio.play().catch(() => {});
+    if (!this._isCrossfading) {
+      if (active) {
+        active.volume = Math.max(0, Math.min(1, targetVol));
+        active.muted = this.bgmMuted || this.bgmVolumeFactor === 0;
+      }
+      if (other) {
+        other.volume = 0;
+        other.muted = this.bgmMuted || this.bgmVolumeFactor === 0;
+      }
+    } else {
+      const p = this._crossfadeProgress;
+      const outVol = targetVol * Math.cos(p * 0.5 * Math.PI);
+      const inVol = targetVol * Math.sin(p * 0.5 * Math.PI);
+      if (active) {
+        active.volume = Math.max(0, Math.min(1, outVol));
+        active.muted = this.bgmMuted || this.bgmVolumeFactor === 0;
+      }
+      if (other) {
+        other.volume = Math.max(0, Math.min(1, inVol));
+        other.muted = this.bgmMuted || this.bgmVolumeFactor === 0;
+      }
     }
   }
 
   startBGM() {
     this._initBGM();
-    this.isPlayingBGM = true;
-    if (this.bgmMuted || !this.bgmAudio) return;
+    // In main menu BGM must NOT play!
+    if (this.world && this.world.inMenu) return;
 
-    const playPromise = this.bgmAudio.play();
-    if (playPromise !== undefined) {
-      playPromise
-        .then(() => {
-          this.isBgmUnlocked = true;
-          if (this.world) this.world.eventBus.emit('AUDIO_UNLOCKED');
-        })
-        .catch(() => {
-          // Autoplay policy: start silently on first user hover/move/interaction without any banners
-        });
+    this.isPlayingBGM = true;
+    if (this.bgmMuted || this.bgmVolumeFactor <= 0) return;
+    if (this.world && this.world.isPaused) return;
+
+    const active = this._getActiveAudio();
+    if (active && active.paused) {
+      active.volume = this._getTargetBgmVolume();
+      const playPromise = active.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            this.isBgmUnlocked = true;
+            if (this.world) this.world.eventBus.emit('AUDIO_UNLOCKED');
+          })
+          .catch(() => {});
+      }
+    }
+  }
+
+  restartBGM() {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (this._lastRestartTime && (now - this._lastRestartTime < 100)) {
+      return;
+    }
+    this._lastRestartTime = now;
+
+    this._initBGM();
+    // In main menu BGM must NOT play!
+    if (this.world && this.world.inMenu) return;
+
+    if (this._crossfadeInterval) {
+      clearInterval(this._crossfadeInterval);
+      this._crossfadeInterval = null;
+    }
+    this._isCrossfading = false;
+    this._crossfadeProgress = 0;
+
+    if (this.playerA) {
+      this.playerA.pause();
+      try { this.playerA.currentTime = 0; } catch (e) {}
+      this.playerA.volume = 0;
+    }
+    if (this.playerB) {
+      this.playerB.pause();
+      try { this.playerB.currentTime = 0; } catch (e) {}
+      this.playerB.volume = 0;
+    }
+
+    // Pick a random track strictly from the beginning
+    this.activePlayerKey = 'A';
+    this.currentTrackIndex = Math.floor(Math.random() * this.tracks.length);
+    this._lastPickedIndex = this.currentTrackIndex;
+    if (this.playerA) {
+      this.playerA.src = this.tracks[this.currentTrackIndex];
+      this.playerA.volume = this._getTargetBgmVolume();
+    }
+
+    this.isPlayingBGM = true;
+    if (this.bgmMuted || this.bgmVolumeFactor <= 0) return;
+    if (this.world && this.world.isPaused) return;
+
+    if (this.playerA) {
+      const playPromise = this.playerA.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            this.isBgmUnlocked = true;
+            if (this.world) this.world.eventBus.emit('AUDIO_UNLOCKED');
+          })
+          .catch(() => {});
+      }
     }
   }
 
   pauseBGM() {
     this.isPlayingBGM = false;
-    if (this.bgmAudio) {
-      this.bgmAudio.pause();
-    }
+    if (this.playerA) this.playerA.pause();
+    if (this.playerB) this.playerB.pause();
   }
 
   resumeBGM() {
-    this.isPlayingBGM = true;
+    // In main menu BGM must NOT play!
+    if (this.world && this.world.inMenu) return;
+    if (this.world && this.world.isPaused) return;
     if (this.bgmMuted || this.bgmVolumeFactor <= 0) return;
+
+    this.isPlayingBGM = true;
     this._initBGM();
-    if (this.bgmAudio) {
-      this.bgmAudio.play().catch(() => {});
+    const active = this._getActiveAudio();
+    if (active && active.paused) {
+      active.play().catch(() => {});
+    }
+    if (this._isCrossfading) {
+      const other = this._getInactiveAudio();
+      if (other && other.paused) {
+        other.play().catch(() => {});
+      }
     }
   }
 
@@ -160,8 +428,12 @@ export class AudioSystem {
 
   _updateSfxGain() {
     if (this.sfxMasterGain && this.audioCtx) {
-      const effectiveGain = this.sfxMuted ? 0 : this.sfxVolume;
-      this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
+      const isMuted = this.sfxMuted || this._isMutedByLossOfFocus || (typeof document !== 'undefined' && document.hidden);
+      const effectiveGain = isMuted ? 0 : this.sfxVolume;
+      try {
+        this.sfxMasterGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
+      } catch (e) {}
     }
   }
 
@@ -236,8 +508,17 @@ export class AudioSystem {
   }
 
   unlockAudio() {
+    if (this._isMutedByLossOfFocus || (typeof document !== 'undefined' && document.hidden)) return;
     this._ensureAudioContext();
+
+    // Do NOT play/start BGM while in main menu
+    if (this.world && this.world.inMenu) {
+      if (this.world) this.world.eventBus.emit('AUDIO_UNLOCKED');
+      return;
+    }
+
     if (this.isPlayingBGM && !this.bgmMuted && this.bgmAudio) {
+      if (this.world && this.world.isPaused) return;
       if (this.bgmAudio.paused) {
         this.bgmAudio.play()
           .then(() => {
@@ -258,24 +539,34 @@ export class AudioSystem {
 
   _ensureAudioContext() {
     if (typeof window === 'undefined') return null;
+    const isDocHidden = typeof document !== 'undefined' && document.hidden;
+    const isMuted = this._isMutedByLossOfFocus || isDocHidden;
+
     if (!this.audioCtx) {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       if (AudioContextClass) {
         this.audioCtx = new AudioContextClass();
         this.sfxMasterGain = this.audioCtx.createGain();
-        const effectiveGain = this.sfxMuted ? 0 : this.sfxVolume;
+        const effectiveGain = (this.sfxMuted || isMuted) ? 0 : this.sfxVolume;
         this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
         this.sfxMasterGain.connect(this.audioCtx.destination);
       }
     }
-    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+
+    // CRITICAL: NEVER auto-resume if focus is lost or document is hidden!
+    if (!isMuted && this.audioCtx && this.audioCtx.state === 'suspended') {
       this.audioCtx.resume().catch(() => {});
     }
+
     if (this.sfxMasterGain && this.audioCtx) {
-      const effectiveGain = this.sfxMuted ? 0 : this.sfxVolume;
-      this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
+      const effectiveGain = (this.sfxMuted || isMuted) ? 0 : this.sfxVolume;
+      try {
+        this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
+      } catch (e) {}
     }
-    return this.audioCtx;
+
+    // Return null if muted by loss of focus so sound generators abort immediately
+    return isMuted ? null : this.audioCtx;
   }
 
   _getSfxDestination(ctx) {
@@ -288,15 +579,145 @@ export class AudioSystem {
     return this.sfxMasterGain || ctx.destination;
   }
 
+  // =========================================================================
+  // TAB FOCUS & VISIBILITY LOSS MUTE (YANDEX GAMES COMPLIANCE)
+  // =========================================================================
+
+  _setupFocusListeners() {
+    if (this._focusListenersAttached || typeof window === 'undefined') return;
+    this._focusListenersAttached = true;
+
+    this._onFocusLost = () => {
+      this._handleLossOfFocus();
+    };
+
+    this._onFocusGained = () => {
+      this._handleGainOfFocus();
+    };
+
+    // Tab visibility changes (switching tabs, minimizing browser)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this._handleLossOfFocus();
+      } else {
+        this._handleGainOfFocus();
+      }
+    });
+
+    // Window focus / blur (clicking outside iframe, interstitial ad modals)
+    window.addEventListener('blur', this._onFocusLost);
+    window.addEventListener('focus', this._onFocusGained);
+
+    // Page hide / show (mobile navigation, app switcher)
+    window.addEventListener('pagehide', this._onFocusLost);
+    window.addEventListener('pageshow', this._onFocusGained);
+  }
+
+  _handleLossOfFocus() {
+    this._isMutedByLossOfFocus = true;
+
+    // 1. Immediately zero the master SFX gain to silence any ongoing or in-flight sounds
+    if (this.sfxMasterGain && this.audioCtx) {
+      try {
+        this.sfxMasterGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.sfxMasterGain.gain.setValueAtTime(0, this.audioCtx.currentTime);
+      } catch (e) {}
+    }
+
+    // 2. Suspend Web Audio API to freeze timeline and prevent procedural synthesis
+    if (this.audioCtx) {
+      if (this.audioCtx.state === 'running') {
+        this._audioCtxWasRunning = true;
+      }
+      this.audioCtx.suspend().catch(() => {});
+    }
+
+    // 3. Pause background music if currently playing
+    const active = this._getActiveAudio();
+    const other = this._getInactiveAudio();
+    const isPlaying = (active && !active.paused) || (other && !other.paused);
+    if (isPlaying) {
+      this._bgmWasPlayingBeforeBlur = true;
+      if (active) active.pause();
+      if (other) other.pause();
+    }
+  }
+
+  _handleGainOfFocus() {
+    // If the document is still hidden, keep muted
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (!this._isMutedByLossOfFocus) return;
+    this._isMutedByLossOfFocus = false;
+
+    // 1. Restore SFX master gain
+    if (this.sfxMasterGain && this.audioCtx) {
+      try {
+        const effectiveGain = this.sfxMuted ? 0 : this.sfxVolume;
+        this.sfxMasterGain.gain.cancelScheduledValues(this.audioCtx.currentTime);
+        this.sfxMasterGain.gain.setValueAtTime(effectiveGain, this.audioCtx.currentTime);
+      } catch (e) {}
+    }
+
+    // 2. Resume Web Audio API
+    if (this.audioCtx && this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+    this._audioCtxWasRunning = false;
+
+    // 3. Resume BGM only if it was playing before blur and game is not paused / not muted / not in menu
+    if (this._bgmWasPlayingBeforeBlur && this.isPlayingBGM && !this.bgmMuted && this.bgmVolumeFactor > 0) {
+      if (!this.world || (!this.world.isPaused && !this.world.inMenu)) {
+        const active = this._getActiveAudio();
+        if (active && active.paused) {
+          active.play().catch(() => {});
+        }
+        if (this._isCrossfading) {
+          const other = this._getInactiveAudio();
+          if (other && other.paused) {
+            other.play().catch(() => {});
+          }
+        }
+      }
+    }
+    this._bgmWasPlayingBeforeBlur = false;
+  }
+
+  _canPlaySfx() {
+    if (this._isMutedByLossOfFocus) return false;
+    if (typeof document !== 'undefined' && document.hidden) return false;
+    if (this.sfxMuted || this.sfxVolume === 0) return false;
+    return true;
+  }
+
+  // Explicit ad playback hooks for Yandex Games SDK
+  pauseForAd() {
+    this._handleLossOfFocus();
+  }
+
+  resumeAfterAd() {
+    this._handleGainOfFocus();
+  }
+
   init(world) {
     this.world = world;
+    this._setupFocusListeners();
     this._initBGM();
-    this.startBGM();
+    // Do NOT call this.startBGM() here! In main menu BGM must NOT play until gameplay starts.
 
     // Attach comprehensive unlock listeners so any early interaction starts sound immediately
     this._setupGlobalUnlockListeners();
 
     // Event bus subscriptions
+    world.eventBus.on('PAUSE_TOGGLED', (event) => {
+      if (event.isPaused) {
+        this.pauseBGM();
+      } else {
+        if (!world.inMenu && !world.isGameOver) {
+          this.resumeBGM();
+        }
+      }
+    });
+
     world.eventBus.on('PROJECTILE_FIRED', (event) => {
       this.playLaserSound(event.isCrit);
     });
@@ -321,7 +742,9 @@ export class AudioSystem {
       this.playWaveAlertSound();
       // Ensure BGM plays right at the start of gameplay when enemies begin flying
       if (!this.bgmMuted && (!this.bgmAudio || this.bgmAudio.paused)) {
-        this.startBGM();
+        if (!world.isPaused && !world.isGameOver && !world.inMenu) {
+          this.startBGM();
+        }
       }
     });
 
@@ -335,7 +758,11 @@ export class AudioSystem {
     });
 
     world.eventBus.on('RESTART_GAME', () => {
-      this.resumeBGM();
+      this.restartBGM();
+    });
+
+    world.eventBus.on('BLINKER_DASH', () => {
+      this.playBlinkerDashSound();
     });
   }
 
@@ -348,7 +775,7 @@ export class AudioSystem {
   // =========================================================================
 
   playLaserSound(isCrit) {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -373,7 +800,7 @@ export class AudioSystem {
   }
 
   playHitSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -395,7 +822,7 @@ export class AudioSystem {
   }
 
   playCritSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -420,7 +847,7 @@ export class AudioSystem {
   }
 
   playExplosionSound(enemyType) {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -454,7 +881,7 @@ export class AudioSystem {
   }
 
   playUpgradeSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -480,7 +907,7 @@ export class AudioSystem {
   }
 
   playWaveAlertSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -502,7 +929,7 @@ export class AudioSystem {
   }
 
   playWaveClearSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -526,7 +953,7 @@ export class AudioSystem {
   }
 
   playGameOverSound() {
-    if (this.sfxMuted || this.sfxVolume === 0) return;
+    if (!this._canPlaySfx()) return;
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
@@ -545,5 +972,27 @@ export class AudioSystem {
 
     osc.start();
     osc.stop(ctx.currentTime + 0.8);
+  }
+
+  playBlinkerDashSound() {
+    if (!this._canPlaySfx()) return;
+    const ctx = this._ensureAudioContext();
+    if (!ctx) return;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(950, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.14);
+
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
+
+    osc.connect(gain);
+    gain.connect(this._getSfxDestination(ctx));
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.14);
   }
 }

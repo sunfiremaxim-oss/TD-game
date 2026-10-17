@@ -18,7 +18,7 @@ import { GameConfig } from '../config/GameConfig.js';
 export class WaveSystem {
   constructor() {
     this.currentWave = 1;
-    this.state = 'ACTIVE'; // Wave 1 starts immediately
+    this.state = 'IDLE'; // Idle until game starts
     this.intermissionTimer = 0;
     this.intermissionDuration = GameConfig.waves.intermissionDuration || 5.0;
 
@@ -37,11 +37,23 @@ export class WaveSystem {
 
   startFirstWave(world) {
     this.currentWave = 1;
+    this.state = 'ACTIVE';
     this._startWave(world);
   }
 
+  reset() {
+    this.currentWave = 1;
+    this.state = 'IDLE';
+    this.intermissionTimer = 0;
+    this.spawnQueue = [];
+    this.spawnInterval = 1.2;
+    this.spawnTimer = 0.3;
+    this.totalEnemiesInWave = 0;
+    this.enemiesSpawned = 0;
+  }
+
   update(world, deltaTime) {
-    if (world.isGameOver) return;
+    if (this.state === 'IDLE' || world.isGameOver) return;
 
     if (this.state === 'INTERMISSION') {
       this.intermissionTimer -= deltaTime;
@@ -65,11 +77,16 @@ export class WaveSystem {
         this.enemiesSpawned++;
         this.spawnTimer = this.spawnInterval;
 
+        const nonShieldEnemies = world.getEntitiesWith(EnemyComponent).filter(id => {
+          const comp = world.getComponent(id, EnemyComponent);
+          return comp && comp.type !== 'boss_shield';
+        });
+
         world.eventBus.emit('WAVE_PROGRESS', {
           wave: this.currentWave,
           spawned: this.enemiesSpawned,
           total: this.totalEnemiesInWave,
-          alive: world.getEntitiesWith(EnemyComponent).length
+          alive: nonShieldEnemies.length
         });
       }
 
@@ -228,15 +245,38 @@ export class WaveSystem {
     const centerX = w / 2;
     const centerY = h / 2;
 
-    // Radial spawn: spawn at a uniform distance outside the visible screen corners
-    // Guarantees all enemies travel identical distance to the tower core from any direction (fixes 16:9 pacing imbalance)
-    const cornerDist = Math.hypot(w / 2, h / 2);
-    const spawnMargin = 40;
-    const spawnRadius = cornerDist + spawnMargin;
+    // Guaranteed off-screen perimeter spawn adapted to current canvas dimensions & aspect ratio:
+    // boss_architect has radius 38 + shieldOrbitRadius 78 + shield radius 12 = 128px bounding radius.
+    // Standard enemies have radius up to 22 + glowBlur 14.
+    const baseMargin = (type === 'boss_architect') ? 125 : 55;
+    // Add small random depth jitter (0 to 25px) so units don't spawn in a rigid flat line
+    const margin = baseMargin + Math.random() * 25;
 
-    const spawnAngle = Math.random() * Math.PI * 2;
-    const spawnX = centerX + Math.cos(spawnAngle) * spawnRadius;
-    const spawnY = centerY + Math.sin(spawnAngle) * spawnRadius;
+    // Uniformly sample along the perimeter of the bounding box expanded by `margin`:
+    // Box dimensions: [-margin, w + margin] x [-margin, h + margin]
+    const boxW = w + 2 * margin;
+    const boxH = h + 2 * margin;
+    const perimeter = 2 * (boxW + boxH);
+    const p = Math.random() * perimeter;
+
+    let spawnX, spawnY;
+    if (p < boxW) {
+      // Top edge (completely above visible screen)
+      spawnX = -margin + p;
+      spawnY = -margin;
+    } else if (p < boxW + boxH) {
+      // Right edge (completely right of visible screen)
+      spawnX = w + margin;
+      spawnY = -margin + (p - boxW);
+    } else if (p < 2 * boxW + boxH) {
+      // Bottom edge (completely below visible screen)
+      spawnX = -margin + (p - (boxW + boxH));
+      spawnY = h + margin;
+    } else {
+      // Left edge (completely left of visible screen)
+      spawnX = -margin;
+      spawnY = -margin + (p - (2 * boxW + boxH));
+    }
 
     // 1. Micro-jitter speed variation (±5% to ±8%)
     const jitterMin = GameConfig.waves.speedJitterMin || -0.07;

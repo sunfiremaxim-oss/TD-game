@@ -29,6 +29,8 @@ export class EnemyComponent {
 
     // Aegis defensive aura dome
     this.shieldDomeRadius = shieldDomeRadius;
+    this.isStopped = false; // Stopped at perimeter (used by snipers and Aegis holding bunker)
+    this.aegisTargetId = null;
 
     // Blinker teleport dash
     this.blinkCooldown = 2.0;

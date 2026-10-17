@@ -32,7 +32,20 @@ export class SniperAISystem {
     const maxStopDist = GameConfig.enemies.sniper.stopDistance || 240;
     const stopDistance = Math.min(maxStopDist, Math.floor(currentRange * 0.90));
 
+    // Pre-scan stopped Aegis entities
+    const stoppedAegises = [];
+    const aegisEntities = world.getEntitiesWith(EnemyComponent, TransformComponent);
+    for (const aId of aegisEntities) {
+      if (world.destructionQueue.has(aId)) continue;
+      const aComp = world.getComponent(aId, EnemyComponent);
+      if (aComp && aComp.type === 'aegis' && aComp.isStopped) {
+        const aTrans = world.getComponent(aId, TransformComponent);
+        if (aTrans) stoppedAegises.push({ comp: aComp, trans: aTrans });
+      }
+    }
+
     for (const sniperId of snipers) {
+      if (world.destructionQueue.has(sniperId)) continue;
       const enemy = world.getComponent(sniperId, EnemyComponent);
       const sniperTrans = world.getComponent(sniperId, TransformComponent);
       const velocity = world.getComponent(sniperId, VelocityComponent);
@@ -41,8 +54,20 @@ export class SniperAISystem {
       const dy = towerTrans.y - sniperTrans.y;
       const dist = Math.hypot(dx, dy);
 
-      // Check perimeter threshold
-      if (dist <= stopDistance) {
+      // Check if sniper is under any stopped Aegis protective dome
+      let stoppedWithAegis = false;
+      for (const a of stoppedAegises) {
+        const d = Math.hypot(a.trans.x - sniperTrans.x, a.trans.y - sniperTrans.y);
+        if (d <= (a.comp.shieldDomeRadius || 115)) {
+          stoppedWithAegis = true;
+          break;
+        }
+      }
+
+      const isStopped = dist <= stopDistance || stoppedWithAegis || enemy.isStopped;
+
+      // Check perimeter threshold or Aegis bunker threshold
+      if (isStopped) {
         if (!enemy.isStopped) {
           enemy.isStopped = true;
           // Initial aiming delay before first shot so tower has at least 0.3-0.45s to kill the sniper
@@ -65,7 +90,7 @@ export class SniperAISystem {
           this._fireSniperProjectile(world, sniperId, sniperTrans, towerId, towerTrans, enemy.damage);
         }
       } else {
-        // Resume approach if pushed away or if tower range changed
+        // Resume approach if pushed away or if Aegis was destroyed / moved
         enemy.isStopped = false;
       }
     }
