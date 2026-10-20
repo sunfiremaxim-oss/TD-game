@@ -74,11 +74,21 @@ export class MovementSystem {
       const transform = world.getComponent(id, TransformComponent);
       const velocity = world.getComponent(id, VelocityComponent);
       const enemyComp = world.getComponent(id, EnemyComponent);
+      enemyComp.knockbackCooldown = Math.max(0, enemyComp.knockbackCooldown - deltaTime);
 
       // Boss shield segments are locked to boss orbit, do not march independently
       if (enemyComp.type === 'boss_shield') {
         velocity.vx = 0;
         velocity.vy = 0;
+        continue;
+      }
+
+      if (enemyComp.knockbackRemaining > 0 && deltaTime > 0) {
+        const activeTime = Math.min(deltaTime, enemyComp.knockbackRemaining);
+        velocity.vx = enemyComp.knockbackVx * activeTime / deltaTime;
+        velocity.vy = enemyComp.knockbackVy * activeTime / deltaTime;
+        enemyComp.knockbackRemaining = Math.max(0, enemyComp.knockbackRemaining - deltaTime);
+        enemyComp.isStopped = false;
         continue;
       }
 
@@ -311,14 +321,19 @@ export class MovementSystem {
 
         for (let i = 0; i < shieldIds.length; i++) {
           const sId = shieldIds[i];
-          if (sId !== null && world.entityManager.isAlive(sId) && !world.destructionQueue.has(sId)) {
-            const sTrans = world.getComponent(sId, TransformComponent);
-            if (sTrans) {
-              const segAngle = enemyComp.shieldOrbitAngle + (i / totalSlots) * Math.PI * 2;
-              sTrans.x = bossTrans.x + Math.cos(segAngle) * orbitR;
-              sTrans.y = bossTrans.y + Math.sin(segAngle) * orbitR;
-              sTrans.rotation = segAngle + Math.PI / 2;
-            }
+          const shieldComp = world.getComponent(sId, EnemyComponent);
+          if (sId === null || !world.entityManager.isAlive(sId) || world.destructionQueue.has(sId) ||
+              !shieldComp || shieldComp.type !== 'boss_shield') {
+            // IDs are recycled: a destroyed shield's old ID may now belong to a projectile.
+            shieldIds[i] = null;
+            continue;
+          }
+          const sTrans = world.getComponent(sId, TransformComponent);
+          if (sTrans) {
+            const segAngle = enemyComp.shieldOrbitAngle + (i / totalSlots) * Math.PI * 2;
+            sTrans.x = bossTrans.x + Math.cos(segAngle) * orbitR;
+            sTrans.y = bossTrans.y + Math.sin(segAngle) * orbitR;
+            sTrans.rotation = segAngle + Math.PI / 2;
           }
         }
       }

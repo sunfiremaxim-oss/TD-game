@@ -42,10 +42,15 @@ export const GameConfig = {
   tower: {
     radius: 26,
     colliderRadius: 26,
-    baseHealth: 600,
+    barrelExtension: 14,
+    barrelWidth: 6,
+    muzzleInset: 10, // Bolt centers start inside the last section of the barrel.
+    baseHealth: 300,
     baseRegen: 1.0,
     baseDamage: 25,
     baseAttackSpeed: 1.6, // attacks per second
+    aimTurnIntervalFraction: 0.14, // A 180-degree turn takes this fraction of a shot interval.
+    aimAfterShotHoldFraction: 0.12, // Briefly retain the firing direction after each volley.
     baseRange: 130,       // Initial attack zone 2x smaller (130px)
     baseCritChance: 0.08,
     baseCritMultiplier: 1.6,
@@ -53,7 +58,7 @@ export const GameConfig = {
     baseMultishotChance: 0.0,
     basePercentArmor: 0.0,
     baseFlatArmor: 0,
-    baseDistanceDamageCoeff: 0.001, // +0.1% damage per unit traveled
+    baseDistanceDamageCoeff: 0.0,
     startCredits: 100
   },
 
@@ -65,7 +70,7 @@ export const GameConfig = {
       radius: 12,
       baseSpeed: 105,
       mass: 1.0,
-      baseHp: 40,
+      baseHp: 17,           // One base hit through wave 5: round(17 * 1.1^4) = 25
       baseDamage: 12,
       baseReward: 10,
       color: '#ffe600',
@@ -104,7 +109,7 @@ export const GameConfig = {
       radius: 14,
       baseSpeed: 80,
       mass: 1.5,
-      baseHp: 75,
+      baseHp: 53,           // About 30% less HP for the ranged archetype
       baseDamage: 22,
       baseReward: 25,
       stopDistance: 240,    // Scaled for tighter base perimeter
@@ -186,7 +191,7 @@ export const GameConfig = {
       radius: 38,
       baseSpeed: 30,        // Imposing slow march
       mass: 30.0,
-      baseHp: 1600,         // Scaled heavily by wave
+      baseHp: 1000,         // Scaled heavily by wave
       baseDamage: 65,       // High contact damage
       baseReward: 350,
       color: '#ff00aa',
@@ -219,7 +224,8 @@ export const GameConfig = {
     hpScaleFactor: 1.10,       // HP = BaseHP * (1.10 ^ (Wave - 1))
     damageScaleFactor: 1.07,   // Damage = BaseDmg * (1.07 ^ (Wave - 1))
     waveBaseReward: 50,
-    waveRewardGrowth: 25
+    waveRewardGrowth: 25,
+    rewardScaleFactor: 1.04    // Smooth economy scaling: Reward = BaseReward * (1.04 ^ (Wave - 1))
   },
 
   // Physics separation constants
@@ -234,7 +240,18 @@ export const GameConfig = {
     maxLifetime: 2.5
   },
 
-  // 12 Upgrades configuration
+  // Special mechanics: all distances are logical world pixels, times are game seconds.
+  combat: {
+    ricochetRadius: 110,
+    ricochetDamageRetention: 0.70,
+    rapidFireMultiplier: 1.5,
+    lifeStealMaxHpPerSecond: 0.015, // One second of healing may be banked for a burst.
+    knockbackDuration: 0.16,
+    knockbackRecovery: 1.25, // Per enemy, shared by all bullets and ricochets.
+    bossKnockbackMultiplier: 0.15
+  },
+
+  // Upgrade definitions and progression (including level-zero values for new abilities).
   upgrades: {
     // OFFENSE
     damage: {
@@ -268,20 +285,10 @@ export const GameConfig = {
       maxLevel: 20, // max 290px (prevents zone from spilling off-screen)
       format: (val) => `${val.toFixed(0)} px`
     },
-    distanceDamage: {
-      id: 'distanceDamage',
-      category: 'offense',
-      name: 'Урон за дальность',
-      icon: '🎯',
-      baseCost: 35,
-      costMultiplier: 1.28,
-      valuePerLevel: 0.0005, // +0.0005 per unit per level
-      format: (val) => `+${(val * 100).toFixed(2)}%/100ед.`
-    },
     critChance: {
       id: 'critChance',
       category: 'offense',
-      name: 'Шанс крита',
+      name: 'Шанс крит. атаки',
       icon: '🎯',
       baseCost: 40,
       costMultiplier: 1.32,
@@ -306,8 +313,8 @@ export const GameConfig = {
       icon: '✨',
       baseCost: 45,
       costMultiplier: 1.30,
-      valuePerLevel: 0.015, // +1.5% per level (reduced from 5%)
-      maxLevel: 25, // up to 37.5%
+      valuePerLevel: 0.005, // +0.5% per level (smooth, balanced scaling)
+      maxLevel: 40, // up to 20.0%
       format: (val) => `${(val * 100).toFixed(1)}%`
     },
     multishotTargets: {
@@ -319,7 +326,32 @@ export const GameConfig = {
       costMultiplier: 1.70,
       valuePerLevel: 1, // +1 projectile
       maxLevel: 5,
+      requires: { id: 'multishotChance', minLevel: 1 },
       format: (val) => `+${val} цели`
+    },
+    ricochetChance: {
+      id: 'ricochetChance', category: 'offense', name: 'Шанс рикошета', icon: '↪',
+      description: 'Шанс начать цепочку при попадании. Радиус перехода 110 px, каждый переход сохраняет 70% урона; повторные попадания в ту же цель исключены.',
+      baseCost: 70, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.0125, maxLevel: 20,
+      format: val => `${(val * 100).toFixed(2)}%`
+    },
+    ricochetCount: {
+      id: 'ricochetCount', category: 'offense', name: 'Количество рикошетов', icon: '↪',
+      description: 'Максимум дополнительных целей в одной сработавшей цепочке рикошетов.',
+      baseCost: 100, costMultiplier: 1.70, baseValue: 1, valuePerLevel: 1, maxLevel: 3,
+      requires: { id: 'ricochetChance', minLevel: 1 }, format: val => `${val.toFixed(0)}`
+    },
+    rapidFireChance: {
+      id: 'rapidFireChance', category: 'offense', name: 'Шанс быстрой атаки', icon: '»',
+      description: 'Шанс ускорить атаку ×1.5 при залпе. Первая покупка даёт +1 п.п., каждая следующая прибавка умножается на 0.98. Уровни не ограничены. Без кулдауна, суммирования и продления активного эффекта.',
+      baseCost: 60, costMultiplier: 1.60, baseValue: 0, valuePerLevel: 0.01, valueDecay: 0.98,
+      format: val => `${(val * 100).toFixed(2)}%`
+    },
+    rapidFireDuration: {
+      id: 'rapidFireDuration', category: 'offense', name: 'Длительность быстрой атаки', icon: '◷',
+      description: 'Время действия ускорения ×1.5: от 0.5 с, +0.15 с за уровень без ограничения уровней. Пауза игры останавливает отсчёт.',
+      baseCost: 65, costMultiplier: 1.40, baseValue: 0.5, valuePerLevel: 0.15,
+      requires: { id: 'rapidFireChance', minLevel: 1 }, format: val => `${val.toFixed(2)} с`
     },
 
     // DEFENSE
@@ -364,12 +396,37 @@ export const GameConfig = {
       valuePerLevel: 1.5, // +1.5 HP/sec
       format: (val) => `+${val.toFixed(1)}/сек`
     },
+    damageReflection: {
+      id: 'damageReflection', category: 'defense', name: 'Отражение урона', icon: '◇',
+      description: 'Возвращает атакующему часть фактически потерянного HP после брони. Урон округляется вниз и учитывает защиту врага. Отражение не вызывает вампиризм.',
+      baseCost: 65, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.10, maxLevel: 5,
+      format: val => `${(val * 100).toFixed(0)}%`
+    },
+    lifeSteal: {
+      id: 'lifeSteal', category: 'defense', name: 'Вампиризм', icon: '♥',
+      description: 'Лечит от реально снятого пулями HP, без избыточного урона при добивании. Лимит лечения — 1.5% максимального HP в секунду, запас до одной секунды.',
+      baseCost: 85, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.01, maxLevel: 5,
+      format: val => `${(val * 100).toFixed(2)}%`
+    },
+    knockbackChance: {
+      id: 'knockbackChance', category: 'defense', name: 'Шанс отталкивания', icon: '⇢',
+      description: 'Попадание пули может оттолкнуть живого врага от ядра. Один враг отталкивается не чаще раза в 1.25 с. Щиты босса неподвижны.',
+      baseCost: 60, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.015, maxLevel: 16,
+      format: val => `${(val * 100).toFixed(1)}%`
+    },
+    knockbackPower: {
+      id: 'knockbackPower', category: 'defense', name: 'Мощность отталкивания', icon: '⇢',
+      description: 'Дистанция отталкивания лёгкого врага. Тяжёлых врагов отбрасывает слабее, босса — на 15% этой дистанции.',
+      baseCost: 55, costMultiplier: 1.35, baseValue: 30, valuePerLevel: 5, maxLevel: 10,
+      requires: { id: 'knockbackChance', minLevel: 1 }, format: val => `${val.toFixed(0)} px`
+    },
 
     // UTILITY / ECONOMY
     killCashBonus: {
       id: 'killCashBonus',
       category: 'utility',
-      name: 'Бонус за убийства',
+      name: 'Бонус кредитов за убийство',
+      description: 'Увеличивает количество кредитов за каждого уничтоженного врага.',
       icon: '🪙',
       baseCost: 40,
       costMultiplier: 1.28,
@@ -379,12 +436,34 @@ export const GameConfig = {
     waveCashBonus: {
       id: 'waveCashBonus',
       category: 'utility',
-      name: 'Бонус за волну',
+      name: 'Бонус кредитов за волну',
+      description: 'Увеличивает количество кредитов за завершение каждой волны.',
       icon: '💎',
       baseCost: 50,
       costMultiplier: 1.30,
       valuePerLevel: 0.15, // +15% wave multiplier
       format: (val) => `+${((val - 1.0) * 100).toFixed(0)}%`
+    },
+    freeAttackChance: {
+      id: 'freeAttackChance', category: 'utility', name: 'Бесплатное улучшение атаки', icon: '+',
+      valueSuffix: ' шанс за волну',
+      description: 'В конце каждой волны независимый шанс бесплатно повысить случайное открытое улучшение атаки на один уровень.',
+      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03, maxLevel: 8,
+      format: val => `${(val * 100).toFixed(0)}%`
+    },
+    freeDefenseChance: {
+      id: 'freeDefenseChance', category: 'utility', name: 'Бесплатное улучшение защиты', icon: '+',
+      valueSuffix: ' шанс за волну',
+      description: 'В конце каждой волны независимый шанс бесплатно повысить случайное открытое улучшение защиты на один уровень.',
+      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03, maxLevel: 8,
+      format: val => `${(val * 100).toFixed(0)}%`
+    },
+    freeEconomyChance: {
+      id: 'freeEconomyChance', category: 'utility', name: 'Бесплатное улучшение экономики', icon: '+',
+      valueSuffix: ' шанс за волну',
+      description: 'В конце каждой волны шанс бесплатно повысить одно улучшение экономики, включая эти шансы. Не запускает дополнительные броски в той же волне.',
+      baseCost: 110, costMultiplier: 1.40, baseValue: 0, valuePerLevel: 0.02, maxLevel: 10,
+      format: val => `${(val * 100).toFixed(0)}%`
     }
   }
 };

@@ -26,5 +26,10 @@ export class ProjectileComponent {
     this.originX = originX;
     this.originY = originY;
     this.distanceBonus = distanceBonus;
+    this.sourceHealth = null; // Identity guard when an enemy shooter's ID is recycled.
+    this.ricochetChance = 0;
+    this.ricochetsRemaining = 0;
+    this.ricochetActive = null; // One chance roll per chain, not per bounce.
+    this.hitTargets = null; // Lazily allocated Set of HealthComponent identities.
   }
 }

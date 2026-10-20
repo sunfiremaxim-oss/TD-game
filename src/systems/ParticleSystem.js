@@ -3,6 +3,8 @@
  * Manages geometric neon debris, shockwave rings, and floating combat text.
  */
 
+import { TransformComponent } from '../components/TransformComponent.js';
+
 export class ParticleSystem {
   constructor() {
     this.particles = [];
@@ -83,6 +85,19 @@ export class ParticleSystem {
     // 4. Blinker teleport dash: electric lightning trail + dual shockwaves
     world.eventBus.on('BLINKER_DASH', (event) => {
       this._spawnBlinkerDashTrail(event.fromX, event.fromY, event.toX, event.toY);
+    });
+    world.eventBus.on('PROJECTILE_RICOCHET', event => this._spawnDamageSparks(event.x, event.y, '#b7a3ef', 3));
+    world.eventBus.on('RAPID_FIRE_STARTED', event => {
+      this._spawnDamageSparks(event.x, event.y, '#ff9cec', 8);
+    });
+    world.eventBus.on('FREE_UPGRADES_GRANTED', event => {
+      const position = world.getComponent(event.towerId, TransformComponent);
+      if (!position) return;
+      event.granted.forEach((grant, index) => {
+        this.floatingTexts.push({ x: position.x, y: position.y - 50 - index * 22,
+          text: `БЕСПЛАТНО: ${grant.name} +1`, color: '#9ee9bf', fontSize: 15, isCrit: false,
+          vy: 12, life: 3, maxLife: 3 });
+      });
     });
   }
 
@@ -210,6 +225,26 @@ export class ParticleSystem {
         life: 0.25 + Math.random() * 0.15,
         maxLife: 0.4
       });
+    }
+  }
+
+  rescale(scaleX, scaleY) {
+    for (const p of this.particles) {
+      p.x *= scaleX;
+      p.y *= scaleY;
+      p.vx *= scaleX;
+      p.vy *= scaleY;
+    }
+    const uniformScale = (scaleX + scaleY) * 0.5;
+    for (const s of this.shockwaves) {
+      s.x *= scaleX;
+      s.y *= scaleY;
+      s.radius *= uniformScale;
+      s.maxRadius *= uniformScale;
+    }
+    for (const ft of this.floatingTexts) {
+      ft.x *= scaleX;
+      ft.y *= scaleY;
     }
   }
 

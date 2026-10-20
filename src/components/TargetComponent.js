@@ -1,11 +1,10 @@
 /**
  * TargetComponent.js
- * Pure DTO: target tracking and prioritization heuristic.
+ * Pure DTO: the enemy currently tracked by the tower, including pre-aim outside range.
  */
 
 export class TargetComponent {
-  constructor(targetEntityId = null, strategy = 'closest') {
+  constructor(targetEntityId = null) {
     this.targetEntityId = targetEntityId;
-    this.strategy = strategy; // 'closest' | 'strongest' | 'weakest'
   }
 }

@@ -10,6 +10,9 @@ import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
+import { VelocityComponent } from '../components/VelocityComponent.js';
+import { RenderComponent } from '../components/RenderComponent.js';
+import { GameConfig } from '../config/GameConfig.js';
 
 export class CollisionSystem {
   update(world, deltaTime) {
@@ -24,6 +27,7 @@ export class CollisionSystem {
 
     // 1. Process projectiles
     for (const projId of projectiles) {
+      if (world.destructionQueue.has(projId)) continue;
       const proj = world.getComponent(projId, ProjectileComponent);
       const projTrans = world.getComponent(projId, TransformComponent);
       const projCol = world.getComponent(projId, CircleColliderComponent);
@@ -41,7 +45,7 @@ export class CollisionSystem {
         let hit = false;
         for (const enemyId of enemies) {
           const enemyHealth = world.getComponent(enemyId, HealthComponent);
-          if (enemyHealth.current <= 0) continue;
+          if (enemyHealth.current <= 0 || world.destructionQueue.has(enemyId) || proj.hitTargets?.has(enemyHealth)) continue;
 
           const enemyTrans = world.getComponent(enemyId, TransformComponent);
           const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
@@ -49,19 +53,25 @@ export class CollisionSystem {
           const dist = Math.hypot(enemyTrans.x - projTrans.x, enemyTrans.y - projTrans.y);
           if (dist <= projCol.radius + enemyCol.radius) {
             // Distance damage scaling: damage increases slightly per unit traveled from origin
-            const traveledDist = Math.hypot(projTrans.x - (proj.originX || projTrans.x), projTrans.y - (proj.originY || projTrans.y));
+            const traveledDist = Math.hypot(projTrans.x - proj.originX, projTrans.y - proj.originY);
             const distMultiplier = 1 + (traveledDist * (proj.distanceBonus || 0));
             const finalDamage = Math.max(1, Math.round(proj.damage * distMultiplier));
 
+            if (proj.ricochetChance > 0) {
+              if (!proj.hitTargets) proj.hitTargets = new Set();
+              proj.hitTargets.add(enemyHealth);
+            }
+
             world.eventBus.emit('PROJECTILE_HIT', {
               projectileId: projId,
+              sourceId: proj.sourceEntityId,
               targetId: enemyId,
               damage: finalDamage,
               isCrit: proj.isCrit,
               hitX: projTrans.x,
               hitY: projTrans.y
             });
-            world.destroyEntity(projId);
+            if (!this._redirectRicochet(world, projId, proj, projTrans, enemies, finalDamage)) world.destroyEntity(projId);
             hit = true;
             break;
           }
@@ -74,6 +84,8 @@ export class CollisionSystem {
           if (dist <= projCol.radius + towerCol.radius) {
             world.eventBus.emit('TOWER_HIT', {
               projectileId: projId,
+              sourceId: proj.sourceEntityId,
+              sourceHealth: proj.sourceHealth,
               damage: proj.damage,
               hitX: projTrans.x,
               hitY: projTrans.y
@@ -121,5 +133,39 @@ export class CollisionSystem {
         }
       }
     }
+  }
+
+  _redirectRicochet(world, projId, projectile, position, enemies, impactDamage) {
+    if (projectile.ricochetChance <= 0 || projectile.ricochetsRemaining <= 0) return false;
+    if (projectile.ricochetActive === null) projectile.ricochetActive = Math.random() < projectile.ricochetChance;
+    if (!projectile.ricochetActive) return false;
+    let nextId = null;
+    let nextPosition = null;
+    let nearestDistance = GameConfig.combat.ricochetRadius;
+    for (const id of enemies) {
+      const hp = world.getComponent(id, HealthComponent);
+      if (!hp || hp.current <= 0 || world.destructionQueue.has(id) || projectile.hitTargets.has(hp)) continue;
+      const target = world.getComponent(id, TransformComponent);
+      const distance = Math.hypot(target.x - position.x, target.y - position.y);
+      if (distance <= nearestDistance) { nextId = id; nextPosition = target; nearestDistance = distance; }
+    }
+    const velocity = world.getComponent(projId, VelocityComponent);
+    if (nextId === null || !velocity) return false;
+    projectile.targetEntityId = nextId;
+    projectile.ricochetsRemaining--;
+    projectile.damage = Math.max(1, Math.round(impactDamage * GameConfig.combat.ricochetDamageRetention));
+    projectile.distanceBonus = 0; // Never reapply the original distance bonus on each hop.
+    projectile.originX = position.x;
+    projectile.originY = position.y;
+    const dx = nextPosition.x - position.x;
+    const dy = nextPosition.y - position.y;
+    const distance = Math.hypot(dx, dy) || 1;
+    velocity.vx = dx / distance * velocity.currentSpeed;
+    velocity.vy = dy / distance * velocity.currentSpeed;
+    position.rotation = Math.atan2(dy, dx);
+    const render = world.getComponent(projId, RenderComponent);
+    if (render) { render.color = '#b7a3ef'; render.glowColor = '#b7a3ef'; }
+    world.eventBus.emit('PROJECTILE_RICOCHET', { projectileId: projId, targetId: nextId, x: position.x, y: position.y });
+    return true;
   }
 }

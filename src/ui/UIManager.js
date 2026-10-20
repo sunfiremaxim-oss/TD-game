@@ -1,13 +1,32 @@
 /**
  * UIManager.js
  * Strictly isolated DOM UI manager.
- * Handles HUD panels, upgrade tabs, target strategy selectors, game speed, and modals.
+ * Handles HUD panels, upgrade tabs, game speed, and modals.
  */
 
 import { TowerComponent } from '../components/TowerComponent.js';
-import { TargetComponent } from '../components/TargetComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { EconomyComponent } from '../components/EconomyComponent.js';
+import { getHealthRatio, getHealthColor } from '../visuals/HealthVisuals.js';
+
+// Each inner array is one logical row, independent of config declaration order.
+export const UPGRADE_LAYOUT = {
+  offense: [['damage', 'attackSpeed'], ['critChance', 'critDamage'], ['multishotChance', 'multishotTargets'],
+    ['ricochetChance', 'ricochetCount'], ['rapidFireChance', 'rapidFireDuration'], ['range']],
+  defense: [['maxHealth', 'healthRegen'], ['armorPercent', 'flatArmor'],
+    ['damageReflection', 'lifeSteal'], ['knockbackChance', 'knockbackPower']],
+  utility: [['killCashBonus', 'waveCashBonus'], ['freeAttackChance'], ['freeDefenseChance'], ['freeEconomyChance']]
+};
+const UPGRADE_LABELS = {
+  damage: 'Урон', attackSpeed: 'Скорость атаки', critChance: 'Шанс крит. атаки', critDamage: 'Крит. урон',
+  multishotChance: 'Мультивыстрел', multishotTargets: 'Доп. цели', range: 'Дальность атаки',
+  maxHealth: 'Прочность', healthRegen: 'Регенерация', armorPercent: 'Броня, %', flatArmor: 'Поглощение',
+  ricochetChance: 'Шанс рикошета', ricochetCount: 'Рикошетов',
+  rapidFireChance: 'Быстрая атака', rapidFireDuration: 'Длительность',
+  damageReflection: 'Отражение', lifeSteal: 'Вампиризм',
+  knockbackChance: 'Отталкивание'
+};
+const GAME_SPEEDS = [1, 2, 3];
 
 export class UIManager {
   constructor(world, upgradeManager, audioSystem) {
@@ -16,10 +35,16 @@ export class UIManager {
     this.audioSystem = audioSystem;
 
     this.activeTab = 'offense'; // 'offense' | 'defense' | 'utility'
+    this.upgradeCardsMap = new Map();
+    this.fpsEnabled = false;
+    this._resetFpsSample();
+    this._boundFpsVisibility = () => this._resetFpsSample();
 
     // DOM references
     this.dom = {
       waveText: document.getElementById('hud-wave'),
+      waveBarFill: document.getElementById('hud-wave-fill'),
+      sidebar: document.getElementById('sidebar'),
       enemyText: document.getElementById('hud-enemies'),
       creditsText: document.getElementById('hud-credits'),
       hpBarFill: document.getElementById('hud-hp-fill'),
@@ -32,18 +57,18 @@ export class UIManager {
 
       // Controls
       btnPause: document.getElementById('btn-pause'),
-      speedBtns: [
-        document.getElementById('btn-speed-1') || document.getElementById('btn-speed'),
-        document.getElementById('btn-speed-2'),
-        document.getElementById('btn-speed-3')
-      ].filter(Boolean),
+      speedValue: document.getElementById('game-speed-value'),
+      btnSpeedDown: document.getElementById('btn-speed-down'),
+      btnSpeedUp: document.getElementById('btn-speed-up'),
+      btnFps: document.getElementById('btn-fps'),
+      fpsCounter: document.getElementById('fps-counter'),
       btnSfx: document.getElementById('btn-sound-sfx'),
       btnMusic: document.getElementById('btn-sound-music'),
-
-      // Strategy buttons
-      stratClosest: document.getElementById('strat-closest'),
-      stratStrongest: document.getElementById('strat-strongest'),
-      stratWeakest: document.getElementById('strat-weakest'),
+      volumePopover: document.getElementById('volume-popover'),
+      volumeLabel: document.getElementById('volume-label'),
+      volumeSlider: document.getElementById('volume-slider'),
+      volumeValue: document.getElementById('volume-value'),
+      volumeMute: document.getElementById('volume-mute'),
 
       // Upgrade tabs and list
       tabOffense: document.getElementById('tab-offense'),
@@ -77,11 +102,12 @@ export class UIManager {
       btnHelpClose: document.getElementById('btn-help-close'),
       btnHelpCloseX: document.getElementById('btn-help-close-x'),
 
-      // Top nav menu button & confirm exit modal
+      // Unified pause menu
       btnToMenu: document.getElementById('btn-to-menu'),
-      modalConfirmMenu: document.getElementById('modal-confirm-menu'),
-      btnConfirmResume: document.getElementById('btn-confirm-resume'),
-      btnConfirmExit: document.getElementById('btn-confirm-exit')
+      modalBattleMenu: document.getElementById('modal-battle-menu'),
+      btnBattleResume: document.getElementById('btn-battle-resume'),
+      btnBattleRestart: document.getElementById('btn-battle-restart'),
+      btnBattleExit: document.getElementById('btn-battle-exit')
     };
 
     this.enemiesAlive = 0;
@@ -107,6 +133,10 @@ export class UIManager {
   }
 
   destroy() {
+    this.closeVolumePopover();
+    document.removeEventListener('pointerdown', this._boundVolumeOutside);
+    window.removeEventListener('resize', this._boundVolumeResize);
+    document.removeEventListener('visibilitychange', this._boundFpsVisibility);
     if (this._boundKeyDown) {
       window.removeEventListener('keydown', this._boundKeyDown);
       this._boundKeyDown = null;
@@ -121,6 +151,11 @@ export class UIManager {
   _bindEvents() {
     if (this._eventsBound) return;
     this._eventsBound = true;
+    this.dom.btnFps?.addEventListener('click', () => this.toggleFps());
+    document.addEventListener('visibilitychange', this._boundFpsVisibility);
+
+    this.dom.btnSpeedDown?.addEventListener('click', () => this.stepGameSpeed(-1));
+    this.dom.btnSpeedUp?.addEventListener('click', () => this.stepGameSpeed(1));
 
     // 1. Tabs
     this.dom.tabOffense?.addEventListener('click', () => this.switchTab('offense'));
@@ -132,48 +167,11 @@ export class UIManager {
       this.togglePause();
     });
 
-    this.dom.speedBtns.forEach((btn, index) => {
-      const speed = parseFloat(btn.dataset.speed || (index + 1));
-      btn.addEventListener('click', () => {
-        this.setGameSpeed(speed);
-      });
-    });
-
     // Keyboard shortcuts: Escape, Space / P for pause, 1, 2, 3 for game speed
     this._boundKeyDown = (e) => this._handleKeyDown(e);
     window.addEventListener('keydown', this._boundKeyDown);
 
-    // 3. Dual Audio Controls (SFX & BGM)
-    // SFX button: click = cycle volume, right-click = toggle mute
-    this.dom.btnSfx?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.audioSystem.cycleSfxVolume();
-      this._updateAudioButtons();
-    });
-    this.dom.btnSfx?.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.audioSystem.toggleSfxMute();
-      this._updateAudioButtons();
-    });
-
-    // Music button: click = cycle volume, right-click = toggle mute
-    this.dom.btnMusic?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.audioSystem.cycleBgmVolume();
-      this._updateAudioButtons();
-    });
-    this.dom.btnMusic?.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.audioSystem.toggleBgmMute();
-      this._updateAudioButtons();
-    });
-
-    // 4. Target strategy switcher
-    this.dom.stratClosest?.addEventListener('click', () => this.setStrategy('closest'));
-    this.dom.stratStrongest?.addEventListener('click', () => this.setStrategy('strongest'));
-    this.dom.stratWeakest?.addEventListener('click', () => this.setStrategy('weakest'));
+    this._bindAudioControls();
 
     // 5. Restart & Game Over buttons
     this.dom.btnRestart?.addEventListener('click', () => {
@@ -196,41 +194,61 @@ export class UIManager {
     this.dom.btnHelpClose?.addEventListener('click', () => this.closeHelp());
     this.dom.btnHelpCloseX?.addEventListener('click', () => this.closeHelp());
 
-    // Menu Audio Toggles
-    this.dom.menuBtnSfx?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.audioSystem.cycleSfxVolume();
-      this._updateAudioButtons();
+    // 7. Pause menu: settings stay available while the simulation is stopped.
+    this.dom.btnToMenu?.addEventListener('click', () => this.openBattleMenu());
+    this.dom.btnBattleResume?.addEventListener('click', () => this.resumeBattle());
+    this.dom.btnBattleRestart?.addEventListener('click', () => {
+      this.closeBattleMenu();
+      this.world.eventBus.emit('RESTART_GAME');
     });
-    this.dom.menuBtnMusic?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.audioSystem.cycleBgmVolume();
-      this._updateAudioButtons();
-    });
-
-    // 7. Top HUD Menu Button & Confirmation Dialog
-    this.dom.btnToMenu?.addEventListener('click', () => {
-      this.openConfirmMenu();
-    });
-    this.dom.btnConfirmResume?.addEventListener('click', () => {
-      this.closeConfirmMenu();
-      this.togglePause();
-    });
-    this.dom.btnConfirmExit?.addEventListener('click', () => {
-      this.closeConfirmMenu();
+    this.dom.btnBattleExit?.addEventListener('click', () => {
+      this.closeBattleMenu();
       this.world.eventBus.emit('RETURN_TO_MENU');
     });
   }
 
-  setStrategy(strat) {
-    const towers = this.world.getEntitiesWith(TowerComponent, TargetComponent);
-    if (towers.length > 0) {
-      const targetComp = this.world.getComponent(towers[0], TargetComponent);
-      if (targetComp) targetComp.strategy = strat;
+  _resetFpsSample() {
+    this._fpsLastTime = null;
+    this._fpsElapsed = 0;
+    this._fpsFrames = 0;
+  }
+
+  toggleFps() {
+    this.fpsEnabled = !this.fpsEnabled;
+    this._resetFpsSample();
+    this.dom.btnFps?.setAttribute('aria-pressed', String(this.fpsEnabled));
+    if (this.dom.btnFps) {
+      this.dom.btnFps.title = this.fpsEnabled ? 'Скрыть счётчик FPS' : 'Показать счётчик FPS';
     }
-    this.dom.stratClosest?.classList.toggle('active', strat === 'closest');
-    this.dom.stratStrongest?.classList.toggle('active', strat === 'strongest');
-    this.dom.stratWeakest?.classList.toggle('active', strat === 'weakest');
+    if (this.dom.fpsCounter) {
+      this.dom.fpsCounter.hidden = !this.fpsEnabled;
+      this.dom.fpsCounter.textContent = '— FPS · — мс';
+    }
+  }
+
+  // Real requestAnimationFrame timestamps, independent of simulation speed and dt clamping.
+  updateFps(timestamp) {
+    if (!this.fpsEnabled) return;
+    if (document.hidden) {
+      this._resetFpsSample();
+      return;
+    }
+    if (this._fpsLastTime !== null) {
+      const elapsed = timestamp - this._fpsLastTime;
+      if (elapsed > 0 && Number.isFinite(elapsed)) {
+        this._fpsElapsed += elapsed;
+        this._fpsFrames++;
+      }
+    }
+    this._fpsLastTime = timestamp;
+    if (this._fpsElapsed >= 500) {
+      const frameMs = this._fpsElapsed / this._fpsFrames;
+      if (this.dom.fpsCounter) {
+        this.dom.fpsCounter.textContent = `${Math.round(1000 / frameMs)} FPS · ${frameMs.toFixed(1)} мс`;
+      }
+      this._fpsElapsed = 0;
+      this._fpsFrames = 0;
+    }
   }
 
   reset() {
@@ -247,9 +265,8 @@ export class UIManager {
 
     this.activeTab = 'offense';
     this.switchTab('offense');
-    this.setStrategy('closest');
     this.hideGameOver();
-    this.closeConfirmMenu();
+    this.closeBattleMenu();
     this.closeIntel();
     this.closeHelp();
     this.setGameSpeed(1.0);
@@ -258,7 +275,9 @@ export class UIManager {
   }
 
   _handleKeyDown(e) {
-    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) return;
+    // Space activates a focused button; it must not also toggle the global pause.
+    if (e.target?.tagName === 'BUTTON' && (e.code === 'Space' || e.key === ' ')) return;
     if (e.key === 'Escape') {
       if (this.dom.modalIntel && !this.dom.modalIntel.classList.contains('hidden')) {
         this.closeIntel();
@@ -268,17 +287,27 @@ export class UIManager {
         this.closeHelp();
         return;
       }
-      if (this.dom.modalConfirmMenu && !this.dom.modalConfirmMenu.classList.contains('hidden')) {
-        this.closeConfirmMenu();
-        this.togglePause();
+      if (this.dom.modalBattleMenu && !this.dom.modalBattleMenu.classList.contains('hidden')) {
+        this.resumeBattle();
         return;
       }
       if (!this.world.inMenu && !this.world.isGameOver) {
-        this.openConfirmMenu();
+        this.openBattleMenu();
         return;
       }
     }
     if (this.world.inMenu || this.world.isGameOver) return; // Ignore simulation hotkeys while in menu or game over
+    if (this.dom.modalBattleMenu && !this.dom.modalBattleMenu.classList.contains('hidden')) {
+      // Space / P and speed shortcuts must never resume combat behind this menu.
+      if (e.code === 'Space' && e.target?.tagName !== 'BUTTON') e.preventDefault();
+      if (e.key === 'Tab') {
+        const first = this.dom.btnBattleResume;
+        const last = this.dom.btnBattleExit;
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+      }
+      return;
+    }
     if (e.code === 'Space' || e.key === ' ' || e.key === 'p' || e.key === 'P' || e.key === 'з' || e.key === 'З') {
       e.preventDefault();
       this.togglePause();
@@ -303,8 +332,8 @@ export class UIManager {
       if (this.dom.intermissionText) {
         const isBoss = data.nextWave % 10 === 0;
         this.dom.intermissionText.textContent = isBoss
-          ? `ПЕРЕРЫВ: ${data.remaining.toFixed(1)}s (ВОЛНА ${data.nextWave} [БОСС])`
-          : `ПЕРЕРЫВ: ${data.remaining.toFixed(1)}s (ВОЛНА ${data.nextWave})`;
+          ? `ДО БОССА: ${data.remaining.toFixed(1)}с`
+          : `ДО ВОЛНЫ ${data.nextWave}: ${data.remaining.toFixed(1)}с`;
       }
     });
 
@@ -315,7 +344,7 @@ export class UIManager {
       if (this.dom.waveText) {
         const isBoss = data.wave % 10 === 0;
         this.dom.waveText.textContent = isBoss
-          ? `ВОЛНА ${String(data.wave).padStart(2, '0')} [БОСС]`
+          ? `ВОЛНА ${String(data.wave).padStart(2, '0')} · БОСС`
           : `ВОЛНА ${String(data.wave).padStart(2, '0')}`;
         this.dom.waveText.style.color = isBoss ? '#ff0055' : '';
         this.dom.waveText.style.textShadow = isBoss ? '0 0 14px #ff0055' : '';
@@ -326,6 +355,7 @@ export class UIManager {
     });
 
     this.world.eventBus.on('WAVE_PROGRESS', (data) => {
+      this.totalEnemies = data.total;
       this.enemiesAlive = (data.total - data.spawned) + data.alive;
       this._updateEnemiesCount();
     });
@@ -345,17 +375,18 @@ export class UIManager {
         void this.dom.creditsText.offsetWidth; // trigger reflow
         this.dom.creditsText.classList.add('pulse');
       }
-      this.renderUpgrades();
+      this.updateUpgradeCards();
     });
 
     this.world.eventBus.on('UPGRADE_PURCHASED', () => {
-      this.renderUpgrades();
+      this.updateUpgradeCards();
       this.updateHUD();
     });
 
     this.world.eventBus.on('TOWER_DAMAGED', () => {
       this.updateHUD();
     });
+    this.world.eventBus.on('TOWER_HEALED', ({ towerId }) => this._updateHealthHUD(this.world.getComponent(towerId, HealthComponent)));
 
     this.world.eventBus.on('GAME_OVER', () => {
       this.world.isPaused = true;
@@ -374,6 +405,10 @@ export class UIManager {
   }
 
   _updateEnemiesCount() {
+    if (this.dom.waveBarFill) {
+      const progress = this.totalEnemies > 0 ? Math.max(0, Math.min(1, 1 - this.enemiesAlive / this.totalEnemies)) : 0;
+      this.dom.waveBarFill.style.width = `${(progress * 100).toFixed(1)}%`;
+    }
     if (this.dom.enemyText) {
       this.dom.enemyText.textContent = `ВРАГИ: ${this.enemiesAlive}`;
     }
@@ -381,25 +416,39 @@ export class UIManager {
 
   switchTab(tabName) {
     this.activeTab = tabName;
+    if (this.dom.sidebar) this.dom.sidebar.dataset.category = tabName;
+    for (const [key, button] of [['offense', this.dom.tabOffense], ['defense', this.dom.tabDefense], ['utility', this.dom.tabUtility]]) {
+      button?.setAttribute('aria-pressed', String(key === tabName));
+    }
+    if (this.dom.upgradesList) this.dom.upgradesList.scrollTop = 0;
     this.dom.tabOffense?.classList.toggle('active', tabName === 'offense');
     this.dom.tabDefense?.classList.toggle('active', tabName === 'defense');
     this.dom.tabUtility?.classList.toggle('active', tabName === 'utility');
     this.renderUpgrades();
   }
 
-  setGameSpeed(speed) {
-    if (this.world.isGameOver || this.world.inMenu) return;
+  setGameSpeed(speed, { resume = true } = {}) {
+    if (this.world.isGameOver || this.world.inMenu || !GAME_SPEEDS.includes(speed)) return;
     const wasPaused = this.world.isPaused;
     this.world.gameSpeed = speed;
-    this.world.isPaused = false;
+    if (resume) this.world.isPaused = false;
     this._updatePauseButton();
-    this.dom.speedBtns.forEach(btn => {
-      const btnSpeed = parseFloat(btn.dataset.speed || '1');
-      btn.classList.toggle('active', btnSpeed === speed);
-    });
-    if (wasPaused) {
+    if (wasPaused && !this.world.isPaused) {
       this.world.eventBus.emit('PAUSE_TOGGLED', { isPaused: false });
     }
+  }
+
+  stepGameSpeed(direction) {
+    const index = GAME_SPEEDS.indexOf(this.world.gameSpeed);
+    const nextIndex = Math.max(0, Math.min(GAME_SPEEDS.length - 1, index + direction));
+    // Selecting a speed while paused leaves the separate play button in control.
+    this.setGameSpeed(GAME_SPEEDS[nextIndex], { resume: false });
+  }
+
+  _updateSpeedControls() {
+    if (this.dom.speedValue) this.dom.speedValue.textContent = `${this.world.gameSpeed.toFixed(1)}×`;
+    if (this.dom.btnSpeedDown) this.dom.btnSpeedDown.disabled = this.world.gameSpeed <= GAME_SPEEDS[0];
+    if (this.dom.btnSpeedUp) this.dom.btnSpeedUp.disabled = this.world.gameSpeed >= GAME_SPEEDS[GAME_SPEEDS.length - 1];
   }
 
   togglePause() {
@@ -410,6 +459,7 @@ export class UIManager {
   }
 
   _updatePauseButton() {
+    this._updateSpeedControls();
     if (!this.dom.btnPause) return;
     const isPaused = !!this.world.isPaused;
     this.dom.btnPause.classList.toggle('active', isPaused);
@@ -417,29 +467,119 @@ export class UIManager {
     this.dom.btnPause.textContent = isPaused ? '▶' : '⏸';
   }
 
+  _bindAudioControls() {
+    const controls = [[this.dom.btnSfx, 'sfx'], [this.dom.menuBtnSfx, 'sfx'],
+      [this.dom.btnMusic, 'bgm'], [this.dom.menuBtnMusic, 'bgm']];
+    for (const [button, channel] of controls) {
+      if (!button) continue;
+      button.setAttribute('aria-expanded', 'false');
+      button.setAttribute('aria-controls', 'volume-popover');
+      button.addEventListener('click', () => this.toggleVolumePopover(button, channel));
+      button.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        if (channel === 'sfx') this.audioSystem.toggleSfxMute();
+        else this.audioSystem.toggleBgmMute();
+        this._updateAudioButtons();
+      });
+    }
+    this.dom.volumeSlider?.addEventListener('input', () => {
+      const value = Number(this.dom.volumeSlider.value) / 100;
+      if (this._volumeChannel === 'sfx') this.audioSystem.setSfxVolume(value);
+      else this.audioSystem.setBgmVolume(value);
+      this._updateAudioButtons();
+    });
+    this.dom.volumeMute?.addEventListener('click', () => {
+      if (this._volumeChannel === 'sfx') this.audioSystem.toggleSfxMute();
+      else this.audioSystem.toggleBgmMute();
+      this._updateAudioButtons();
+    });
+    this.dom.volumePopover?.addEventListener('keydown', (event) => {
+      // Slider arrows, Space and number keys must not trigger gameplay shortcuts.
+      event.stopPropagation();
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        const anchor = this._volumeAnchor;
+        this.closeVolumePopover();
+        anchor?.focus();
+      }
+    });
+    this._boundVolumeOutside = (event) => {
+      if (!this.dom.volumePopover?.contains(event.target) && !this._volumeAnchor?.contains(event.target)) {
+        this.closeVolumePopover();
+      }
+    };
+    this._boundVolumeResize = () => this.closeVolumePopover();
+    document.addEventListener('pointerdown', this._boundVolumeOutside);
+    window.addEventListener('resize', this._boundVolumeResize);
+  }
+
+  toggleVolumePopover(button, channel) {
+    const wasOpen = this._volumeAnchor === button;
+    this.closeVolumePopover();
+    if (wasOpen || !this.dom.volumePopover) return;
+    this._volumeAnchor = button;
+    this._volumeChannel = channel;
+    this.dom.volumePopover.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    this.dom.volumeLabel.textContent = channel === 'sfx' ? 'ГРОМКОСТЬ ЗВУКОВ' : 'ГРОМКОСТЬ МУЗЫКИ';
+    this._syncVolumeSlider();
+    const rect = button.getBoundingClientRect();
+    const panel = this.dom.volumePopover;
+    const margin = 8;
+    const left = Math.max(margin, Math.min(rect.right - panel.offsetWidth, window.innerWidth - panel.offsetWidth - margin));
+    const below = rect.bottom + margin;
+    const top = below + panel.offsetHeight <= window.innerHeight - margin ? below : Math.max(margin, rect.top - panel.offsetHeight - margin);
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    this.dom.volumeSlider.focus();
+  }
+
+  closeVolumePopover() {
+    this._volumeAnchor?.setAttribute('aria-expanded', 'false');
+    this._volumeAnchor = null;
+    this._volumeChannel = null;
+    if (this.dom.volumePopover) this.dom.volumePopover.hidden = true;
+  }
+
+  _syncVolumeSlider() {
+    if (!this._volumeChannel || !this.dom.volumeSlider) return;
+    const sfx = this._volumeChannel === 'sfx';
+    const muted = sfx ? this.audioSystem.sfxMuted : this.audioSystem.bgmMuted;
+    const volume = sfx ? this.audioSystem.sfxVolume : this.audioSystem.bgmVolumeFactor;
+    const percent = muted ? 0 : Math.round(volume * 100);
+    this.dom.volumeSlider.value = String(percent);
+    this.dom.volumeValue.textContent = `${percent}%`;
+    this.dom.volumeMute.textContent = muted || volume === 0 ? 'ВКЛЮЧИТЬ' : 'ВЫКЛЮЧИТЬ';
+  }
+
   _updateAudioButtons() {
+    this._syncVolumeSlider();
     if (this.dom.btnSfx && this.audioSystem) {
       const info = this.audioSystem.getSfxLabel();
-      this.dom.btnSfx.innerHTML = `<span class="audio-icon">${info.icon}</span> <span class="audio-label">${info.text}</span>`;
+      const level = info.isMuted ? 'ВЫКЛ' : `${Math.round(this.audioSystem.sfxVolume * 100)}%`;
+      this.dom.btnSfx.innerHTML = `<span class="audio-icon">${info.icon}</span><span class="audio-label">ЗВУК</span><span class="audio-level">${level}</span>`;
       this.dom.btnSfx.title = info.title;
       this.dom.btnSfx.classList.toggle('muted', info.isMuted);
     }
     if (this.dom.menuLabelSfx && this.audioSystem) {
       const info = this.audioSystem.getSfxLabel();
-      this.dom.menuLabelSfx.textContent = `ЗВУКИ: ${info.text.replace('ЗВУК: ', '')}`;
+      this.dom.menuLabelSfx.textContent = info.isMuted ? 'ЗВУКИ: ВЫКЛ' : `ЗВУКИ: ${Math.round(this.audioSystem.sfxVolume * 100)}%`;
       this.dom.menuBtnSfx?.classList.toggle('muted', info.isMuted);
+      if (this.dom.menuBtnSfx) this.dom.menuBtnSfx.title = info.title;
     }
 
     if (this.dom.btnMusic && this.audioSystem) {
       const info = this.audioSystem.getBgmLabel();
-      this.dom.btnMusic.innerHTML = `<span class="audio-icon">${info.icon}</span> <span class="audio-label">${info.text}</span>`;
+      const level = info.isMuted ? 'ВЫКЛ' : `${Math.round(this.audioSystem.bgmVolumeFactor * 100)}%`;
+      this.dom.btnMusic.innerHTML = `<span class="audio-icon">${info.icon}</span><span class="audio-label">МУЗЫКА</span><span class="audio-level">${level}</span>`;
       this.dom.btnMusic.title = info.title;
       this.dom.btnMusic.classList.toggle('muted', info.isMuted);
     }
     if (this.dom.menuLabelMusic && this.audioSystem) {
       const info = this.audioSystem.getBgmLabel();
-      this.dom.menuLabelMusic.textContent = `МУЗЫКА: ${info.text.replace('МУЗЫКА: ', '')}`;
+      this.dom.menuLabelMusic.textContent = info.isMuted ? 'МУЗЫКА: ВЫКЛ' : `МУЗЫКА: ${Math.round(this.audioSystem.bgmVolumeFactor * 100)}%`;
       this.dom.menuBtnMusic?.classList.toggle('muted', info.isMuted);
+      if (this.dom.menuBtnMusic) this.dom.menuBtnMusic.title = info.title;
     }
   }
 
@@ -467,10 +607,15 @@ export class UIManager {
   _updateHealthHUD(health) {
     if (!health) return;
 
-    const pct = Math.max(0, Math.min(100, (health.current / health.max) * 100));
+    const ratio = getHealthRatio(health.current, health.max);
+    const pct = ratio * 100;
     const pctStr = `${pct.toFixed(1)}%`;
     if (this.dom.hpBarFill && this.dom.hpBarFill.style.width !== pctStr) {
       this.dom.hpBarFill.style.width = pctStr;
+    }
+    const color = getHealthColor(ratio);
+    if (this.dom.hpBarFill && this.dom.hpBarFill.style.backgroundColor !== color) {
+      this.dom.hpBarFill.style.backgroundColor = color;
     }
 
     const displayCurrent = Math.min(health.max, Math.ceil(health.current));
@@ -478,8 +623,8 @@ export class UIManager {
       this._lastDisplayHp = displayCurrent;
       this._lastMaxHp = health.max;
       this._lastRegenRate = health.regenRate;
-      const regenText = health.regenRate > 0 ? ` (+${health.regenRate.toFixed(1)}/с)` : '';
-      this.dom.hpText.innerHTML = `<span style="color:#94a3b8; font-weight:700;">HP:</span> <strong>${displayCurrent}</strong> / ${health.max}${regenText ? `<span style="color:#00ff88; font-weight:800;">${regenText}</span>` : ''}`;
+      const regenText = health.regenRate > 0 ? `+${health.regenRate.toFixed(1)}/с` : '';
+      this.dom.hpText.innerHTML = `<span class="hp-label">HP</span><span class="hp-value"><strong>${displayCurrent}</strong> / ${health.max}</span>${regenText ? `<span class="hp-regen">${regenText}</span>` : ''}`;
     }
   }
 
@@ -503,47 +648,102 @@ export class UIManager {
   renderUpgrades() {
     if (!this.dom.upgradesList || !this.upgradeManager) return;
 
+    const allUpgrades = this.upgradeManager.getAllUpgrades();
+    const categoryUpgrades = allUpgrades.filter(u => u.category === this.activeTab);
+    const rows = UPGRADE_LAYOUT[this.activeTab] || [];
+    const orderedIds = rows.flat();
+    const byId = new Map(categoryUpgrades.map(u => [u.id, u]));
+    const filtered = [...orderedIds.map(id => byId.get(id)).filter(Boolean),
+      ...categoryUpgrades.filter(u => !orderedIds.includes(u.id))];
+    const wideIds = new Set(rows.filter(row => row.length === 1).flat());
+
+    this.dom.upgradesList.innerHTML = '';
+    this.upgradeCardsMap.clear();
+
+    for (const u of filtered) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = `upgrade-card upgrade-buy-btn${wideIds.has(u.id) ? ' wide' : ''}${u.category === 'utility' || u.id === 'knockbackPower' || u.id === 'critChance' ? ' wrap-title' : ''}`;
+      card.dataset.upgrade = u.id;
+      card.innerHTML = `
+        <span class="upgrade-header">
+          <span class="upgrade-title">${UPGRADE_LABELS[u.id] || u.name}</span>
+          <span class="upgrade-lvl"></span>
+        </span>
+        <span class="upgrade-stats">
+          <span class="stat-current"></span><span class="stat-arrow" aria-hidden="true">→</span><span class="stat-next"></span>
+        </span>
+        <span class="upgrade-footer"><span class="upgrade-price"></span><span class="upgrade-hint">УЛУЧШИТЬ</span></span>
+      `;
+
+      const levelEl = card.querySelector('.upgrade-lvl');
+      const currentEl = card.querySelector('.stat-current');
+      const nextEl = card.querySelector('.stat-next');
+      const buyBtn = card;
+      const priceEl = card.querySelector('.upgrade-price');
+      const hintEl = card.querySelector('.upgrade-hint');
+
+      buyBtn.addEventListener('click', () => {
+        this.upgradeManager.buyUpgrade(u.id, this.world);
+      });
+
+      this.upgradeCardsMap.set(u.id, {
+        cardEl: card,
+        levelEl,
+        currentEl,
+        nextEl,
+        buyBtn,
+        priceEl,
+        hintEl,
+        def: u
+      });
+
+      this.dom.upgradesList.appendChild(card);
+    }
+
+    this.updateUpgradeCards();
+  }
+
+  updateUpgradeCards() {
+    if (!this.dom.upgradesList || !this.upgradeManager || this.upgradeCardsMap.size === 0) return;
+
     const towers = this.world.getEntitiesWith(TowerComponent, EconomyComponent);
     const currentCredits = towers.length > 0 ? this.world.getComponent(towers[0], EconomyComponent).credits : 0;
 
-    const allUpgrades = this.upgradeManager.getAllUpgrades();
-    const filtered = allUpgrades.filter(u => u.category === this.activeTab);
+    for (const [id, item] of this.upgradeCardsMap) {
+      const u = item.def;
+      const lvl = this.upgradeManager.getLevel(id);
+      const cost = this.upgradeManager.getCost(id);
+      const currentVal = this.upgradeManager.getCurrentValue(id);
+      const nextVal = this.upgradeManager.getNextValue(id);
 
-    this.dom.upgradesList.innerHTML = '';
+      const isUnlocked = this.upgradeManager.isUnlocked(id);
+      const isMax = Boolean(u.maxLevel && lvl >= u.maxLevel);
+      const canAfford = isUnlocked && !isMax && currentCredits >= cost;
+      const shouldDisable = !canAfford || isMax || !isUnlocked;
+      const lockReason = this.upgradeManager.getLockReason(id);
 
-    for (const u of filtered) {
-      const isMax = u.maxLevel && u.level >= u.maxLevel;
-      const canAfford = !isMax && currentCredits >= u.cost;
+      item.cardEl.classList.toggle('maxed', isMax);
+      item.cardEl.classList.toggle('locked', !isUnlocked);
+      item.levelEl.textContent = `УР. ${lvl}${u.maxLevel ? `/${u.maxLevel}` : ''}`;
+      item.currentEl.textContent = u.format(currentVal) + (u.valueSuffix || '');
+      item.nextEl.textContent = isMax ? 'MAX' : u.format(nextVal);
 
-      const card = document.createElement('div');
-      card.className = `upgrade-card ${isMax ? 'maxed' : ''}`;
+      item.buyBtn.setAttribute('aria-label', `${u.name}: ${u.format(currentVal)} → ${u.format(nextVal)}. ${!isUnlocked ? lockReason : isMax ? 'Максимальный уровень' : `Купить за ${cost.toLocaleString()} кредитов`}. ${u.description || ''}`);
+      item.buyBtn.title = [u.description || u.name, lockReason].filter(Boolean).join(' ');
+      item.buyBtn.disabled = shouldDisable;
+      item.buyBtn.classList.toggle('disabled', shouldDisable);
 
-      const formattedCurrent = u.format(u.currentVal);
-      const formattedNext = isMax ? 'MAX' : u.format(u.nextVal);
-
-      card.innerHTML = `
-        <div class="upgrade-header">
-          <span class="upgrade-title">${u.icon} ${u.name}</span>
-          <span class="upgrade-lvl">УР. ${u.level}${u.maxLevel ? `/${u.maxLevel}` : ''}</span>
-        </div>
-        <div class="upgrade-stats">
-          <span class="stat-current">${formattedCurrent}</span>
-          <span class="stat-arrow">➔</span>
-          <span class="stat-next">${formattedNext}</span>
-        </div>
-        <button class="upgrade-buy-btn ${!canAfford ? 'disabled' : ''}" ${!canAfford ? 'disabled' : ''}>
-          ${isMax ? 'МАКСИМУМ' : `КУПИТЬ: ${u.cost.toLocaleString()} ◈`}
-        </button>
-      `;
-
-      const buyBtn = card.querySelector('.upgrade-buy-btn');
-      if (buyBtn && !isMax) {
-        buyBtn.addEventListener('click', () => {
-          this.upgradeManager.buyUpgrade(u.id, this.world);
-        });
+      if (!isUnlocked) {
+        item.priceEl.textContent = 'НУЖЕН ШАНС';
+        item.hintEl.textContent = 'ЗАКРЫТО';
+      } else if (isMax) {
+        item.priceEl.textContent = 'МАКСИМУМ';
+        item.hintEl.textContent = '✓';
+      } else {
+        item.priceEl.textContent = `${cost.toLocaleString()} ◈`;
+        item.hintEl.textContent = 'УЛУЧШИТЬ';
       }
-
-      this.dom.upgradesList.appendChild(card);
     }
   }
 
@@ -555,22 +755,24 @@ export class UIManager {
   }
 
   showMainMenu() {
+    this.closeVolumePopover();
     document.getElementById('game-app')?.classList.add('in-menu');
     this.dom.mainMenu?.classList.remove('hidden');
     this.dom.modalGameOver?.classList.add('hidden');
-    this.dom.modalConfirmMenu?.classList.add('hidden');
+    this.closeBattleMenu();
     this.dom.modalIntel?.classList.add('hidden');
     this.dom.modalHelp?.classList.add('hidden');
     this._updateAudioButtons();
   }
 
   hideMainMenu() {
+    this.closeVolumePopover();
     this.intelRenderer?.stop();
     document.getElementById('game-app')?.classList.remove('in-menu');
     this.dom.mainMenu?.classList.add('hidden');
     this.dom.modalIntel?.classList.add('hidden');
     this.dom.modalHelp?.classList.add('hidden');
-    this.dom.modalConfirmMenu?.classList.add('hidden');
+    this.closeBattleMenu();
     this._updateAudioButtons();
   }
 
@@ -592,15 +794,23 @@ export class UIManager {
     this.dom.modalHelp?.classList.add('hidden');
   }
 
-  openConfirmMenu() {
-    this.world.isPaused = true;
-    this._updatePauseButton();
-    this.world.eventBus.emit('PAUSE_TOGGLED', { isPaused: true });
-    this.dom.modalConfirmMenu?.classList.remove('hidden');
+  openBattleMenu() {
+    if (this.world.inMenu || this.world.isGameOver) return;
+    this.closeVolumePopover();
+    if (!this.world.isPaused) this.togglePause();
+    this.dom.modalBattleMenu?.classList.remove('hidden');
+    this.dom.btnBattleResume?.focus();
   }
 
-  closeConfirmMenu() {
-    this.dom.modalConfirmMenu?.classList.add('hidden');
+  closeBattleMenu() {
+    this.closeVolumePopover();
+    this.dom.modalBattleMenu?.classList.add('hidden');
+  }
+
+  resumeBattle() {
+    this.closeBattleMenu();
+    if (this.world.isPaused) this.togglePause();
+    this.dom.btnToMenu?.focus();
   }
 }
 

@@ -294,6 +294,9 @@ export class WaveSystem {
     const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, wave - 1);
     const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier));
 
+    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, wave - 1));
+    const scaledReward = Math.max(1, Math.round(archetype.baseReward * rewardMultiplier));
+
     const isSniper = archetype.type === 'sniper';
 
     // Sniper stop distance dynamically adapts to tower attack range
@@ -339,7 +342,7 @@ export class WaveSystem {
 
     const enemyComp = new EnemyComponent(
       archetype.type,
-      archetype.baseReward,
+      scaledReward,
       isSniper,
       isSniper ? (GameConfig.enemies.sniper.initialAimDelay || 0.45) : 0, // initial shootCooldown
       archetype.shootInterval || 2.8,
@@ -357,6 +360,7 @@ export class WaveSystem {
       const orbitSpeed = archetype.shieldOrbitSpeed || 1.25;
       const shieldArchetype = GameConfig.enemies.boss_shield;
       const shieldHp = Math.round(shieldArchetype.baseHp * hpMultiplier);
+      const scaledShieldReward = Math.max(1, Math.round(shieldArchetype.baseReward * rewardMultiplier));
 
       const shieldIds = [];
       for (let i = 0; i < shieldCount; i++) {
@@ -380,7 +384,7 @@ export class WaveSystem {
         ));
         world.addComponent(sId, new EnemyComponent(
           'boss_shield',
-          shieldArchetype.baseReward,
+          scaledShieldReward,
           false,
           0,
           0,
@@ -416,6 +420,8 @@ export class WaveSystem {
     const scaledHp = Math.round(archetype.baseHp * hpMultiplier);
     const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, this.currentWave - 1);
     const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier));
+    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, this.currentWave - 1));
+    const scaledReward = Math.max(1, Math.round(archetype.baseReward * rewardMultiplier));
 
     const towerX = world.width / 2;
     const towerY = world.height / 2;
@@ -455,7 +461,7 @@ export class WaveSystem {
 
       const enemyComp = new EnemyComponent(
         archetype.type,
-        archetype.baseReward,
+        scaledReward,
         false,
         0,
         0,

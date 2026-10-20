@@ -8,17 +8,20 @@ if (!fs.existsSync(outDir)) {
 
 const htmlSource = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const cssSource = fs.readFileSync(path.join(__dirname, 'css', 'style.css'), 'utf8');
+const battleCssSource = fs.readFileSync(path.join(__dirname, 'css', 'battle.css'), 'utf8');
 
 const jsFiles = [
   'src/core/EntityManager.js',
   'src/core/EventBus.js',
   'src/core/World.js',
   'src/config/GameConfig.js',
+  'src/visuals/HealthVisuals.js',
   'src/components/TransformComponent.js',
   'src/components/VelocityComponent.js',
   'src/components/CircleColliderComponent.js',
   'src/components/HealthComponent.js',
   'src/components/ArmorComponent.js',
+  'src/components/DefenseComponent.js',
   'src/components/AttackComponent.js',
   'src/components/TargetComponent.js',
   'src/components/RenderComponent.js',
@@ -26,6 +29,7 @@ const jsFiles = [
   'src/components/EnemyComponent.js',
   'src/components/ProjectileComponent.js',
   'src/components/EconomyComponent.js',
+  'src/combat/DamageCalculation.js',
   'src/systems/MovementSystem.js',
   'src/systems/PhysicsSeparationSystem.js',
   'src/systems/TargetingSystem.js',
@@ -64,6 +68,11 @@ bundledJs += '})();\n';
 let bundledHtml = htmlSource.replace(
   /<link\s+rel=["']stylesheet["']\s+href=["']css\/style\.css["']>\s*/i,
   `<style>\n${cssSource}\n</style>\n`
+);
+
+bundledHtml = bundledHtml.replace(
+  /<link\s+rel=["']stylesheet["']\s+href=["']css\/battle\.css(?:\?[^"']*)?["']>\s*/i,
+  `<style>\n${battleCssSource}\n</style>\n`
 );
 
 // Replace external module script with inline <script>

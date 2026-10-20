@@ -51,7 +51,7 @@ html, body {
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior: none;
   -webkit-overscroll-behavior: none;
-  touch-action: none;
+  touch-action: manipulation;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -khtml-user-select: none;
@@ -84,7 +84,7 @@ html, body {
   height: 100%;
   position: relative;
   overflow: hidden;
-  touch-action: none;
+  touch-action: manipulation;
   overscroll-behavior: none;
 }
 
@@ -338,6 +338,62 @@ html, body {
 }
 
 /* Audio Controls Group (SFX & BGM) */
+#volume-popover {
+  position: fixed;
+  z-index: 200;
+  width: min(260px, calc(100vw - 16px));
+  padding: 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--neon-cyan);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+  font-family: var(--font-ui);
+}
+
+#volume-popover[hidden] {
+  display: none;
+}
+
+.volume-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--neon-cyan);
+}
+
+#volume-value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+#volume-slider {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--neon-cyan);
+  cursor: pointer;
+  touch-action: none;
+}
+
+#volume-mute {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border-neon);
+  border-radius: 5px;
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--text-main);
+  font: 800 14px var(--font-ui);
+  cursor: pointer;
+}
+
+#volume-slider:focus-visible, #volume-mute:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+}
+
 .audio-controls-group {
   display: flex;
   align-items: center;
@@ -420,65 +476,51 @@ html, body {
   user-select: none;
 }
 
-/* Canvas targeting overlay control */
-#strategy-overlay {
+/* Lightweight performance display; no animated effects while measuring FPS. */
+#performance-overlay {
   position: absolute;
-  bottom: 24px;
-  left: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: rgba(10, 15, 26, 0.94);
-  border: 2px solid var(--border-neon);
-  border-radius: 8px;
-  padding: 12px 18px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7), 0 0 15px rgba(0, 243, 255, 0.2);
+  top: 12px;
+  right: 12px;
   z-index: 10;
-}
-
-.overlay-label {
-  font-family: var(--font-cyber);
-  font-size: 12px;
-  letter-spacing: 1.5px;
-  color: #a8c5e2;
-  font-weight: 900;
-  text-shadow: 0 0 6px rgba(0, 243, 255, 0.4);
-}
-
-.strat-buttons {
   display: flex;
+  align-items: center;
   gap: 8px;
+  font: 13px var(--font-mono);
 }
 
-.strat-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1.5px solid rgba(255, 255, 255, 0.2);
-  color: #e2f4ff;
-  padding: 8px 14px;
-  font-size: 14px;
-  font-family: var(--font-ui);
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  cursor: pointer;
+#btn-fps {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-neon);
   border-radius: 5px;
-  transition: all 0.2s ease;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
 }
 
-.strat-btn:hover {
+#btn-fps[aria-pressed="true"], #btn-fps:focus-visible {
   border-color: var(--neon-cyan);
-  color: #ffffff;
-  background: rgba(0, 243, 255, 0.15);
-  box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
+  color: var(--neon-cyan);
 }
 
-.strat-btn.active {
-  background: rgba(0, 243, 255, 0.25);
-  border-color: var(--neon-cyan);
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(0, 243, 255, 0.6);
-  text-shadow: 0 0 8px var(--neon-cyan);
+#fps-counter {
+  padding: 8px;
+  border-radius: 5px;
+  background: rgba(6, 8, 14, 0.9);
+  color: var(--neon-cyan);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
 }
+
+
+
+
+
+
+
 
 /* ==========================================================================
    UPGRADE SIDEBAR
@@ -492,18 +534,6 @@ html, body {
   flex-direction: column;
   z-index: 15;
   box-shadow: -6px 0 30px rgba(0, 0, 0, 0.7);
-}
-
-.sidebar-header {
-  padding: 18px 20px;
-  border-bottom: 2px solid var(--border-neon);
-  font-family: var(--font-cyber);
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  color: var(--neon-cyan);
-  text-shadow: 0 0 10px rgba(0, 243, 255, 0.6);
-  background: rgba(0, 0, 0, 0.3);
 }
 
 /* TABS */
@@ -691,6 +721,21 @@ html, body {
   text-shadow: 0 0 6px var(--neon-green);
 }
 
+.upgrade-card.locked {
+  opacity: 0.65;
+  border-color: rgba(255, 170, 0, 0.25);
+}
+
+.upgrade-card.locked .upgrade-buy-btn {
+  font-size: 11.5px;
+  letter-spacing: 0.5px;
+  color: #ffaa00;
+  border-color: rgba(255, 170, 0, 0.35);
+  background: rgba(255, 170, 0, 0.05);
+  box-shadow: none;
+  text-shadow: none;
+}
+
 /* ==========================================================================
    GAME OVER MODAL
    ========================================================================== */
@@ -789,9 +834,6 @@ html, body {
   display: none !important;
 }
 
-#game-app.in-menu #strategy-overlay {
-  display: none !important;
-}
 
 .menu-overlay {
   position: absolute;
@@ -1457,10 +1499,6 @@ html, body {
   #sidebar {
     width: 310px;
   }
-  .sidebar-header {
-    padding: 12px 14px;
-    font-size: 14px;
-  }
   .tab-btn {
     padding: 10px 4px;
     font-size: 12px;
@@ -1478,16 +1516,6 @@ html, body {
   .icon-btn {
     padding: 6px 10px;
     font-size: 13px;
-  }
-  #strategy-overlay {
-    bottom: 14px;
-    left: 14px;
-    padding: 10px 14px;
-    gap: 6px;
-  }
-  .strat-btn {
-    padding: 6px 10px;
-    font-size: 12px;
   }
 }
 
@@ -1540,149 +1568,158 @@ html, body {
   }
 }
 
-/* 4. Mobile Portrait Mode (max-width: 680px or portrait orientation under 900px) */
-@media (max-width: 680px), (orientation: portrait) and (max-width: 900px) {
-  #game-viewport {
-    flex-direction: column;
-  }
-  #canvas-wrapper {
-    flex: 1 1 54%;
-    min-height: 50%;
-    width: 100%;
-  }
-  #sidebar {
-    width: 100%;
-    height: 44%;
-    max-height: 380px;
-    flex: 0 0 44%;
-    border-left: none;
-    border-top: 2px solid var(--border-neon);
-    box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.7);
-  }
+/* Shared viewport constraints: safe areas, nested scroll containers and touch input. */
+#game-app {
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+#top-hud, .tabs-container { flex-shrink: 0; }
+#game-viewport, #canvas-wrapper, #sidebar, #upgrade-panel, #upgrades-list { min-height: 0; min-width: 0; }
+#sidebar { flex-shrink: 0; }
+#upgrade-panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.hud-game-controls { display: flex; align-items: center; gap: 8px; }
+#mobile-speed { display: none; }
+[data-scrollable] { touch-action: pan-y; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.menu-panel { max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px); overflow-y: auto; flex-shrink: 0; }
+.menu-overlay, .modal-backdrop { padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.modal-content {
+  max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 24px);
+  overflow-y: auto;
+  min-height: 0;
+}
+.modal-header, .modal-buttons-row { flex-shrink: 0; }
+.intel-grid, .help-scroll-body { min-height: 0; flex-shrink: 1; }
+.upgrade-card { flex-shrink: 0; }
+button, select, input { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, select:focus-visible { outline: 2px solid var(--neon-cyan); outline-offset: 2px; }
+#game-app.in-menu #performance-overlay { display: none; }
+
+/* Compact HUD used by phones, tablets and narrow desktop windows. */
+@media (max-width: 1100px) {
   #top-hud {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     height: auto;
-    min-height: 50px;
-    padding: 6px 8px;
+    min-height: 0;
     gap: 6px;
-    flex-wrap: wrap;
-    justify-content: space-between;
+    padding: 6px 8px;
   }
-  #intermission-container {
-    order: 10;
-    width: 100%;
-    margin-top: 4px;
+  #top-hud > .hud-group { display: contents; }
+  .hud-badge {
+    font-size: clamp(10px, 2.5vw, 13px);
+    padding: 5px 3px;
+    justify-content: center;
+    letter-spacing: 0;
+    white-space: nowrap;
+    min-width: 0;
   }
-  #strategy-overlay {
-    bottom: 8px;
-    left: 8px;
-    padding: 6px 10px;
-    gap: 4px;
-    background: rgba(10, 15, 26, 0.95);
+  .hud-credits {
+    font-size: clamp(12px, 3vw, 17px);
+    padding: 4px;
+    justify-content: center;
+    white-space: nowrap;
+    min-width: 0;
   }
-  .overlay-label {
-    font-size: 10px;
-    letter-spacing: 1px;
+  .hp-container { width: auto; min-width: 0; }
+  #hud-hp-text { font-size: 10px; line-height: 1.15; overflow-wrap: anywhere; }
+  .hud-game-controls { grid-column: 1 / -1; gap: 6px; width: 100%; }
+  .speed-controls { flex: 1; gap: 4px; min-width: 0; }
+  .speed-controls .speed-btn[data-speed] { display: none; }
+  #mobile-speed {
+    display: block;
+    flex: 1;
+    min-width: 60px;
+    background: var(--bg-panel);
+    color: var(--neon-cyan);
+    border: 1px solid var(--border-neon);
+    border-radius: 5px;
+    font: 800 16px var(--font-ui);
+    padding: 0 8px;
   }
-  .strat-buttons {
-    gap: 4px;
-  }
-  .strat-btn {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-  .menu-panel {
-    padding: 24px 18px;
-    width: 92%;
-    gap: 14px;
-  }
-  .menu-title {
-    font-size: 30px;
-    letter-spacing: 3px;
-  }
-  .menu-subtitle {
-    font-size: 11px;
-    letter-spacing: 2px;
-  }
-  .menu-btn {
-    padding: 12px 16px;
-    font-size: 14px;
-  }
-  .modal-content {
-    padding: 22px 16px !important;
-    width: 94% !important;
-    gap: 14px !important;
-  }
-  .modal-title {
-    font-size: 22px !important;
-    letter-spacing: 2px !important;
-  }
-  .modal-body {
-    font-size: 15px;
-  }
-  .modal-buttons-row {
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-  }
-  .modal-btn {
-    width: 100%;
-    padding: 12px 18px;
-    text-align: center;
-  }
-  .intel-grid {
-    grid-template-columns: 1fr;
-    max-height: 58vh;
-  }
-  .intel-card {
-    padding: 10px 12px;
-    gap: 10px;
-  }
-  .help-branches {
-    grid-template-columns: 1fr;
-    gap: 8px;
-  }
-  .help-scroll-body {
-    max-height: 58vh;
-  }
+  .speed-btn, .icon-btn, #mobile-speed { min-height: 44px; min-width: 44px; }
+  .audio-btn .audio-label, .menu-nav-btn .menu-label { display: none; }
+  .menu-nav-btn, .audio-btn { padding: 6px; justify-content: center; }
+  .audio-controls-group { gap: 4px; }
+  #intermission-container { grid-column: 1 / -1; order: 5; width: 100%; margin: 0; }
+  #intermission-container.hidden { display: none; }
+  #intermission-text { font-size: 10px; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .intermission-bar-bg { height: 5px; border-width: 1px; }
+  #performance-overlay { top: 8px; right: 8px; gap: 4px; font-size: 11px; }
+  #fps-counter { padding: 5px; }
+  #sidebar { width: clamp(250px, 30vw, 320px); }
+  .tab-btn, .upgrade-buy-btn { min-height: 44px; }
+  .tab-btn { padding: 6px 3px; font-size: 11px; letter-spacing: 0; }
+  .upgrade-card { padding: 10px; gap: 6px; }
+  .upgrade-title { font-size: 15px; overflow-wrap: anywhere; }
+  .upgrade-lvl { flex-shrink: 0; font-size: 10px; padding: 3px 5px; }
+  .upgrade-stats { flex-wrap: wrap; gap: 6px; font-size: 14px; }
+  .upgrade-buy-btn { font-size: 12px; padding: 6px; letter-spacing: 0; }
+  .menu-panel { width: 100%; padding: 20px 16px; gap: 14px; }
+  .menu-title { font-size: clamp(26px, 6vw, 46px); letter-spacing: 2px; }
+  .menu-subtitle { font-size: 11px; letter-spacing: 1px; }
+  .menu-protocol-tag { font-size: 9px; letter-spacing: 1px; padding: 4px 8px; }
+  .menu-btn, .menu-audio-btn, .modal-btn, .modal-close-x { min-height: 44px; }
+  .menu-btn { font-size: 14px; padding: 12px; }
+  .menu-audio-section { width: 100%; padding: 10px; }
+  .menu-audio-buttons { flex-wrap: wrap; }
+  .menu-audio-btn { font-size: 11px; padding: 6px; }
+  .menu-keys-hint { display: none; }
+  .modal-content { padding: 18px 14px !important; width: min(94vw, 760px) !important; gap: 12px !important; }
+  .modal-title { font-size: clamp(18px, 4vw, 26px) !important; letter-spacing: 1px !important; overflow-wrap: anywhere; }
+  .modal-body { font-size: 15px; }
+  .modal-buttons-row { width: 100%; flex-wrap: wrap; gap: 8px; }
+  .modal-btn { flex: 1; font-size: 13px; padding: 10px; }
+  .intel-grid, .help-scroll-body { max-height: none; }
+  .intel-card { padding: 10px; gap: 10px; }
+  .intel-info { min-width: 0; overflow-wrap: anywhere; }
+  .intel-name-row { flex-wrap: wrap; gap: 4px; }
+  .modal-header { gap: 6px; }
+  .modal-header .modal-title { min-width: 0; }
+  .modal-close-x { flex-shrink: 0; min-width: 44px; }
+  .hotkey-item { flex-wrap: wrap; }
+  .modal-content, .modal-intel-content, .modal-help-content { max-width: 100% !important; }
 }
 
-/* 5. Short Height Landscape (e.g. mobile rotated horizontally, height <= 520px) */
-@media (max-height: 520px) {
-  #top-hud {
-    height: 48px;
-    padding: 0 10px;
-  }
-  .menu-panel {
-    padding: 16px 20px;
-    gap: 10px;
-    max-height: 94vh;
-    overflow-y: auto;
-  }
-  .menu-title {
-    font-size: 24px;
-    letter-spacing: 2px;
-  }
-  .menu-protocol-tag {
-    font-size: 9px;
-    padding: 2px 10px;
-  }
-  .menu-actions {
-    gap: 6px;
-  }
-  .menu-btn {
-    padding: 8px 14px;
-    font-size: 12.5px;
-  }
-  .menu-audio-section {
-    padding: 8px 12px;
-    gap: 4px;
-  }
-  .modal-content {
-    padding: 16px 20px !important;
-    max-height: 94vh;
-  }
-  .intel-grid,
-  .help-scroll-body {
-    max-height: 52vh;
-  }
+/* Portrait: a collapsible bottom upgrade deck leaves the fight visible. */
+@media (max-width: 1100px) and (orientation: portrait), (max-width: 400px) {
+  #game-viewport { flex-direction: column; }
+  #canvas-wrapper { flex: 1 1 0; width: 100%; min-height: 0; }
+  #sidebar { width: 100%; height: auto; max-height: none; flex: 0 0 min(36dvh, 300px); border-left: 0; border-top: 1px solid var(--border-neon); }
+  #upgrades-list { padding: 8px; gap: 8px; }
+  .intel-grid { grid-template-columns: 1fr; }
+  .help-branches { grid-template-columns: 1fr; }
+}
+
+/* Landscape phone: keep upgrades beside the field. */
+@media (min-width: 401px) and (max-width: 1100px) and (orientation: landscape) {
+  #game-viewport { flex-direction: row; }
+  #sidebar { flex: 0 0 clamp(240px, 30vw, 300px); }
+}
+
+/* Extra-short screens still retain scrollable menus and reachable controls. */
+@media (max-height: 600px) and (min-width: 740px) and (max-width: 1100px) {
+  #top-hud { grid-template-columns: auto auto auto minmax(80px, 1fr) auto; gap: 4px; padding: 4px 6px; }
+  .hud-game-controls { grid-column: auto; width: auto; }
+  .speed-controls { flex: initial; }
+  #mobile-speed { width: 60px; }
+  #intermission-container { grid-column: 1 / -1; }
+  .hud-badge { font-size: 10px; }
+  .hud-credits { font-size: 13px; }
+  #hud-hp-text { font-size: 10px; }
+  .menu-panel { gap: 8px; padding: 14px; }
+  .menu-title { font-size: 24px; }
+  .menu-actions { gap: 6px; }
+  .menu-btn { padding: 8px 12px; }
+  .menu-audio-section { padding: 6px; gap: 4px; }
+  .modal-content { padding: 12px !important; }
+}
+
+@media (pointer: coarse) {
+  button { touch-action: manipulation; }
+  .menu-btn, .menu-audio-btn, .modal-btn, .modal-close-x, .tab-btn, .upgrade-buy-btn, .speed-btn, .icon-btn { min-height: 44px; }
+  .modal-close-x { min-width: 44px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse-dot, #intermission-text { animation: none; }
+  button, .upgrade-card { transition: none; }
 }

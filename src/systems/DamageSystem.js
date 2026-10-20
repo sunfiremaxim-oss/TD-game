@@ -5,24 +5,29 @@
  */
 
 import { HealthComponent } from '../components/HealthComponent.js';
-import { ArmorComponent } from '../components/ArmorComponent.js';
 import { TransformComponent } from '../components/TransformComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { DefenseComponent } from '../components/DefenseComponent.js';
+import { CircleColliderComponent } from '../components/CircleColliderComponent.js';
+
+import { calculateMitigatedDamage } from '../combat/DamageCalculation.js?v=2.7';
 
 export class DamageSystem {
   init(world) {
     // 1. Listen for player projectile hitting enemy
     world.eventBus.on('PROJECTILE_HIT', (event) => {
-      this._applyDamageToEntity(world, event.targetId, event.damage, event.isCrit, event.hitX, event.hitY);
+      this._applyDamageToEntity(world, event.targetId, event.damage, event.isCrit, event.hitX, event.hitY,
+        { sourceId: event.sourceId, kind: 'projectile' });
     });
 
     // 2. Listen for sniper projectile hitting tower
     world.eventBus.on('TOWER_HIT', (event) => {
       const towers = world.getEntitiesWith(TowerComponent);
       if (towers.length > 0) {
-        this._applyDamageToEntity(world, towers[0], event.damage, false, event.hitX, event.hitY);
+        this._applyDamageToEntity(world, towers[0], event.damage, false, event.hitX, event.hitY,
+          { sourceId: event.sourceId, sourceHealth: event.sourceHealth, kind: 'projectile' });
       }
     });
 
@@ -34,7 +39,8 @@ export class DamageSystem {
         const enemyComp = world.getComponent(event.enemyId, EnemyComponent);
         const enemyType = enemyComp ? enemyComp.type : 'scout';
         const contactDamage = (enemyComp && enemyComp.damage) ? enemyComp.damage : (GameConfig.enemies[enemyType]?.baseDamage || 15);
-        this._applyDamageToEntity(world, towers[0], contactDamage, false, event.hitX, event.hitY);
+        this._applyDamageToEntity(world, towers[0], contactDamage, false, event.hitX, event.hitY,
+          { sourceId: event.enemyId, sourceHealth: world.getComponent(event.enemyId, HealthComponent), kind: 'contact' });
       }
     });
   }
@@ -48,50 +54,22 @@ export class DamageSystem {
         health.current = Math.min(health.max, health.current + health.regenRate * deltaTime);
       }
     }
+    for (const id of world.getEntitiesWith(TowerComponent, DefenseComponent, HealthComponent)) {
+      const defense = world.getComponent(id, DefenseComponent);
+      const health = world.getComponent(id, HealthComponent);
+      const cap = health.max * GameConfig.combat.lifeStealMaxHpPerSecond;
+      defense.lifeStealBudget = health.current > 0 ? Math.min(cap, defense.lifeStealBudget + cap * deltaTime) : 0;
+    }
   }
 
-  _applyDamageToEntity(world, targetId, rawDamage, isCrit, hitX, hitY) {
+  _applyDamageToEntity(world, targetId, rawDamage, isCrit, hitX, hitY, context = null) {
     const health = world.getComponent(targetId, HealthComponent);
-    if (!health || health.current <= 0) return;
+    if (!health || health.current <= 0 || world.destructionQueue.has(targetId)) return;
 
-    const armor = world.getComponent(targetId, ArmorComponent);
     const isTower = world.hasComponent(targetId, TowerComponent);
+    const netDamage = calculateMitigatedDamage(world, targetId, rawDamage);
 
-    // Armor mitigation: flat subtraction followed by capped percentage reduction
-    const flatRed = armor ? (armor.flatReduction || 0) : 0;
-    const rawPct = armor ? (armor.percentReduction || 0) : 0;
-    const cappedPct = Math.min(0.85, rawPct); // Soft cap at 85%
-
-    const damageAfterFlat = Math.max(1, rawDamage - flatRed);
-    let netDamage = Math.max(1, Math.round(damageAfterFlat * (1 - cappedPct)));
-
-    // Aegis Dome Defense: 50% damage reduction for all enemies inside an active Aegis dome
-    if (!isTower) {
-      const aegises = world.getEntitiesWith(EnemyComponent, TransformComponent);
-      const targetTrans = world.getComponent(targetId, TransformComponent);
-      if (targetTrans) {
-        let insideAegisDome = false;
-        for (const aId of aegises) {
-          if (aId === targetId) continue; // Aegis only protects allies around it, not itself
-          const aComp = world.getComponent(aId, EnemyComponent);
-          if (aComp && aComp.type === 'aegis') {
-            const aTrans = world.getComponent(aId, TransformComponent);
-            if (aTrans) {
-              const domeR = aComp.shieldDomeRadius || 115;
-              const d = Math.hypot(targetTrans.x - aTrans.x, targetTrans.y - aTrans.y);
-              if (d <= domeR) {
-                insideAegisDome = true;
-                break;
-              }
-            }
-          }
-        }
-        if (insideAegisDome) {
-          netDamage = Math.max(1, Math.round(netDamage * 0.5));
-        }
-      }
-    }
-
+    const actualDamage = Math.min(health.current, netDamage);
     health.current -= netDamage;
 
     // Get position for particle/text feedback
@@ -102,6 +80,9 @@ export class DamageSystem {
     world.eventBus.emit('DAMAGE_DEALT', {
       targetId,
       netDamage,
+      actualDamage,
+      sourceId: context?.sourceId,
+      damageKind: context?.kind,
       isCrit: !!isCrit,
       isTower,
       x: posX,
@@ -114,6 +95,10 @@ export class DamageSystem {
         maxHp: health.max,
         damageTaken: netDamage
       });
+      this._reflectDamage(world, targetId, actualDamage, context);
+    } else if (context?.kind === 'projectile' && world.hasComponent(context.sourceId, TowerComponent)) {
+      this._applyLifeSteal(world, context.sourceId, actualDamage);
+      if (health.current > 0) this._applyKnockback(world, context.sourceId, targetId);
     }
 
     // Death check
@@ -139,10 +124,23 @@ export class DamageSystem {
         });
       }
 
+      // Remove the reference before this shield ID can be reused by another entity.
+      // Keep empty slots so surviving shields retain their original orbit spacing.
+      if (enemyComp && enemyComp.type === 'boss_shield') {
+        for (const id of world.getEntitiesWith(EnemyComponent)) {
+          const boss = world.getComponent(id, EnemyComponent);
+          if (boss.type !== 'boss_architect' || !boss.shieldIds) continue;
+          for (let i = 0; i < boss.shieldIds.length; i++) {
+            if (boss.shieldIds[i] === targetId) boss.shieldIds[i] = null;
+          }
+        }
+      }
+
       // Boss Architect: destroy any remaining orbiting shield segments
       if (enemyComp && enemyComp.type === 'boss_architect' && enemyComp.shieldIds) {
         for (const sId of enemyComp.shieldIds) {
-          if (world.entityManager.isAlive(sId)) {
+          const shield = world.getComponent(sId, EnemyComponent);
+          if (world.entityManager.isAlive(sId) && shield && shield.type === 'boss_shield') {
             world.destroyEntity(sId);
           }
         }
@@ -158,5 +156,51 @@ export class DamageSystem {
         world.destroyEntity(targetId);
       }
     }
+  }
+
+  _reflectDamage(world, towerId, damageTaken, context) {
+    const defense = world.getComponent(towerId, DefenseComponent);
+    if (!defense || defense.damageReflection <= 0 || !context?.sourceHealth) return;
+    const sourceId = context.sourceId;
+    // A sniper can die long before its bullet arrives. Never hit a recycled ID.
+    if (!world.hasComponent(sourceId, EnemyComponent) || world.destructionQueue.has(sourceId) ||
+        world.getComponent(sourceId, HealthComponent) !== context.sourceHealth || context.sourceHealth.current <= 0) return;
+    const reflected = Math.floor(damageTaken * defense.damageReflection);
+    if (reflected <= 0) return;
+    this._applyDamageToEntity(world, sourceId, reflected, false, undefined, undefined,
+      { sourceId: towerId, kind: 'reflection' });
+  }
+
+  _applyLifeSteal(world, towerId, damageDealt) {
+    const defense = world.getComponent(towerId, DefenseComponent);
+    const health = world.getComponent(towerId, HealthComponent);
+    if (!defense || defense.lifeSteal <= 0 || !health || health.current <= 0) return;
+    const healing = Math.min(damageDealt * defense.lifeSteal, defense.lifeStealBudget,
+      health.max * GameConfig.combat.lifeStealMaxHpPerSecond, health.max - health.current);
+    if (healing <= 0) return;
+    defense.lifeStealBudget -= healing;
+    health.current += healing;
+    world.eventBus.emit('TOWER_HEALED', { towerId, healing });
+  }
+
+  _applyKnockback(world, towerId, targetId) {
+    const defense = world.getComponent(towerId, DefenseComponent);
+    const enemy = world.getComponent(targetId, EnemyComponent);
+    if (!defense || defense.knockbackChance <= 0 || !enemy || enemy.type === 'boss_shield' ||
+        enemy.knockbackCooldown > 0 || Math.random() >= defense.knockbackChance) return;
+    const origin = world.getComponent(towerId, TransformComponent);
+    const target = world.getComponent(targetId, TransformComponent);
+    if (!origin || !target) return;
+    const mass = world.getComponent(targetId, CircleColliderComponent)?.mass || 1;
+    const resistance = enemy.type === 'boss_architect' ? GameConfig.combat.bossKnockbackMultiplier : 1 / Math.sqrt(Math.max(1, mass));
+    const speed = defense.knockbackPower * resistance / GameConfig.combat.knockbackDuration;
+    const dx = target.x - origin.x;
+    const dy = target.y - origin.y;
+    const distance = Math.hypot(dx, dy);
+    enemy.knockbackVx = distance > 0 ? dx / distance * speed : speed;
+    enemy.knockbackVy = distance > 0 ? dy / distance * speed : 0;
+    enemy.knockbackRemaining = GameConfig.combat.knockbackDuration;
+    enemy.knockbackCooldown = GameConfig.combat.knockbackRecovery;
+    enemy.isStopped = false;
   }
 }

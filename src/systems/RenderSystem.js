@@ -13,6 +13,7 @@ import { AttackComponent } from '../components/AttackComponent.js';
 import { TargetComponent } from '../components/TargetComponent.js';
 import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { getHealthRatio, getHealthColor } from '../visuals/HealthVisuals.js';
 
 export class RenderSystem {
   constructor(canvas, particleSystem) {
@@ -29,8 +30,11 @@ export class RenderSystem {
 
   update(world, deltaTime) {
     const ctx = this.ctx;
-    const width = this.canvas.width;
-    const height = this.canvas.height;
+    const width = this.canvas.viewportWidth || this.canvas.width;
+    const height = this.canvas.viewportHeight || this.canvas.height;
+    const pixelRatio = this.canvas.pixelRatio || 1;
+    ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+    const scale = world.renderScale || 1.0;
 
     this.corePulseAngle += deltaTime * 2.5;
     this.radarRotation += deltaTime * 0.6;
@@ -42,6 +46,12 @@ export class RenderSystem {
 
     // 1. Draw Deep Cyber-Space with 3-Layer Parallax & Nebulae
     this._drawSpaceBackground(ctx, width, height, world);
+
+    // Virtual Camera Scale for Mobile Viewport Support
+    ctx.save();
+    if (scale !== 1.0) {
+      ctx.scale(scale, scale);
+    }
 
     // 2. Draw tactical grids (strictly clipped to tower attack range and enemy shield domes)
     this._drawTacticalGrids(ctx, world, width, height);
@@ -55,9 +65,6 @@ export class RenderSystem {
     // 4. Draw enemies and health bars
     this._drawEnemies(ctx, world);
 
-    // 4b. Draw miniature health bar under the tower core (always visible and drawn on top of enemies)
-    this._drawTowerMiniHealthBar(ctx, world);
-
     // 5. Draw projectiles
     this._drawProjectiles(ctx, world);
 
@@ -67,6 +74,8 @@ export class RenderSystem {
       this._drawShockwaves(ctx);
       this._drawFloatingTexts(ctx);
     }
+
+    ctx.restore();
 
     // 7. If paused, not game over, and not in main menu, draw cyberpunk pause indicator
     if (world.isPaused && !world.isGameOver && !world.inMenu) {
@@ -115,7 +124,7 @@ export class RenderSystem {
     ctx.font = '700 11px Rajdhani, Orbitron, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.shadowBlur = 0;
-    ctx.fillText('НАЖМИТЕ ПРОБЕЛ / P ДЛЯ ИГРЫ', width / 2, badgeY + 40);
+    ctx.fillText('НАЖМИТЕ ▶ В ПАНЕЛИ УПРАВЛЕНИЯ', width / 2, badgeY + 40);
 
     ctx.restore();
   }
@@ -336,14 +345,20 @@ export class RenderSystem {
     ctx.fillStyle = '#050711';
     ctx.fillRect(0, 0, width, height);
 
+    const VIRT_W = 2400;
+    const VIRT_H = 1600;
+    // Positions fill the viewport, but decorative detail must shrink with gameplay.
+    // Otherwise fixed CSS-pixel stars dwarf enemies on a phone's virtual camera.
+    const detailScale = Math.min(1, world.renderScale || 1);
+
     // 2. Cosmic nebulae clouds (slow breathing radial gradients)
     for (const neb of this.nebulae) {
-      const nebX = (neb.baseX * width + Math.sin(this.spaceTime * 0.2 + neb.phase) * 60 - this.parallaxDriftX * 0.15);
-      const nebY = (neb.baseY * height + Math.cos(this.spaceTime * 0.18 + neb.phase) * 45 - this.parallaxDriftY * 0.15);
+      const nebX = (neb.baseX * width + Math.sin(this.spaceTime * 0.2 + neb.phase) * 60 * detailScale - this.parallaxDriftX * 0.15 * detailScale);
+      const nebY = (neb.baseY * height + Math.cos(this.spaceTime * 0.18 + neb.phase) * 45 * detailScale - this.parallaxDriftY * 0.15 * detailScale);
       const wrapX = ((nebX % width) + width) % width;
       const wrapY = ((nebY % height) + height) % height;
 
-      const r = neb.radius + Math.sin(this.spaceTime * 0.35 + neb.phase) * 35;
+      const r = (neb.radius + Math.sin(this.spaceTime * 0.35 + neb.phase) * 35) * detailScale;
       const grad = ctx.createRadialGradient(wrapX, wrapY, r * 0.05, wrapX, wrapY, r);
       grad.addColorStop(0, neb.color);
       grad.addColorStop(0.65, neb.accent);
@@ -355,46 +370,58 @@ export class RenderSystem {
       ctx.fill();
     }
 
-    // 3. Layer 1: Distant Micro-Stars (Parallax factor: 0.35)
+    // 3. Layer 1: Distant Micro-Stars (Parallax factor: 0.35, wrapped in virtual 2400x1600 space)
     const drift1X = this.parallaxDriftX * 0.35;
     const drift1Y = this.parallaxDriftY * 0.35;
     for (const s of this.distantStars) {
-      const x = ((s.x - drift1X) % width + width) % width;
-      const y = ((s.y - drift1Y) % height + height) % height;
+      const vx = ((s.x - drift1X) % VIRT_W + VIRT_W) % VIRT_W;
+      const vy = ((s.y - drift1Y) % VIRT_H + VIRT_H) % VIRT_H;
+      const x = (vx / VIRT_W) * width;
+      const y = (vy / VIRT_H) * height;
       const twinkle = 0.7 + 0.3 * Math.sin(this.spaceTime * s.twinkleSpeed + s.twinklePhase);
       ctx.globalAlpha = Math.max(0.1, Math.min(1, s.alpha * twinkle));
       ctx.fillStyle = s.color;
-      ctx.fillRect(x, y, s.size, s.size);
+      ctx.fillRect(x, y, s.size * detailScale, s.size * detailScale);
     }
 
     // 4. Layer 2: Mid-Distance Geometric Stars & Constellations (Parallax factor: 0.70)
     const drift2X = this.parallaxDriftX * 0.70;
     const drift2Y = this.parallaxDriftY * 0.70;
 
-    // Draw faint constellation links between nearby stars
-    ctx.lineWidth = 0.8;
+    // Calculate normalized screen coordinates for all mid-stars to preserve constellation topology
+    const midScreenCoords = new Array(this.midStars.length);
+    for (let i = 0; i < this.midStars.length; i++) {
+      const s = this.midStars[i];
+      const vx = ((s.x - drift2X) % VIRT_W + VIRT_W) % VIRT_W;
+      const vy = ((s.y - drift2Y) % VIRT_H + VIRT_H) % VIRT_H;
+      midScreenCoords[i] = {
+        x: (vx / VIRT_W) * width,
+        y: (vy / VIRT_H) * height
+      };
+    }
+
+    // Draw faint constellation links between nearby stars without edge stretching
+    ctx.lineWidth = 0.8 * detailScale;
     ctx.strokeStyle = 'rgba(0, 243, 255, 0.08)';
+    const maxLinkDistX = width * 0.25;
+    const maxLinkDistY = height * 0.25;
     for (const [i, j] of this.constellations) {
-      const s1 = this.midStars[i];
-      const s2 = this.midStars[j];
-      const x1 = ((s1.x - drift2X) % width + width) % width;
-      const y1 = ((s1.y - drift2Y) % height + height) % height;
-      const x2 = ((s2.x - drift2X) % width + width) % width;
-      const y2 = ((s2.y - drift2Y) % height + height) % height;
+      const p1 = midScreenCoords[i];
+      const p2 = midScreenCoords[j];
 
       // Only draw line if stars haven't wrapped across opposite screen boundaries
-      if (Math.abs(x1 - x2) < 220 && Math.abs(y1 - y2) < 220) {
+      if (Math.abs(p1.x - p2.x) < maxLinkDistX && Math.abs(p1.y - p2.y) < maxLinkDistY) {
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
+        ctx.moveTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
         ctx.stroke();
       }
     }
 
     // Draw mid-distance stars (diamonds, crosses, glowing dots)
-    for (const s of this.midStars) {
-      const x = ((s.x - drift2X) % width + width) % width;
-      const y = ((s.y - drift2Y) % height + height) % height;
+    for (let i = 0; i < this.midStars.length; i++) {
+      const s = this.midStars[i];
+      const { x, y } = midScreenCoords[i];
       const twinkle = 0.65 + 0.35 * Math.sin(this.spaceTime * s.twinkleSpeed + s.twinklePhase);
       const alpha = Math.max(0.15, Math.min(1, s.alpha * twinkle));
 
@@ -404,7 +431,7 @@ export class RenderSystem {
 
       if (s.type === 'diamond') {
         // 4-pointed diamond spark
-        const r = s.size;
+        const r = s.size * detailScale;
         ctx.beginPath();
         ctx.moveTo(x, y - r);
         ctx.lineTo(x + r * 0.65, y);
@@ -414,29 +441,31 @@ export class RenderSystem {
         ctx.fill();
       } else if (s.type === 'cross') {
         // 4-pointed cross star flare
-        const arm = s.size * 1.3;
-        ctx.lineWidth = 1;
+        const arm = s.size * 1.3 * detailScale;
+        ctx.lineWidth = detailScale;
         ctx.beginPath();
         ctx.moveTo(x - arm, y);
         ctx.lineTo(x + arm, y);
         ctx.moveTo(x, y - arm);
         ctx.lineTo(x, y + arm);
         ctx.stroke();
-        ctx.fillRect(x - 0.75, y - 0.75, 1.5, 1.5);
+        ctx.fillRect(x - 0.75 * detailScale, y - 0.75 * detailScale, 1.5 * detailScale, 1.5 * detailScale);
       } else {
         // Glowing dot
         ctx.beginPath();
-        ctx.arc(x, y, s.size * 0.6, 0, Math.PI * 2);
+        ctx.arc(x, y, s.size * 0.6 * detailScale, 0, Math.PI * 2);
         ctx.fill();
       }
     }
 
-    // 5. Layer 3: Foreground Cyber Motes (Parallax factor: 1.25)
+    // 5. Layer 3: Foreground Cyber Motes (Parallax factor: 1.25, wrapped in virtual space)
     const drift3X = this.parallaxDriftX * 1.25;
     const drift3Y = this.parallaxDriftY * 1.25;
     for (const m of this.foregroundMotes) {
-      const x = ((m.x - drift3X) % width + width) % width;
-      const y = ((m.y - drift3Y) % height + height) % height;
+      const vx = ((m.x - drift3X) % VIRT_W + VIRT_W) % VIRT_W;
+      const vy = ((m.y - drift3Y) % VIRT_H + VIRT_H) % VIRT_H;
+      const x = (vx / VIRT_W) * width;
+      const y = (vy / VIRT_H) * height;
       const pulse = 0.65 + 0.35 * Math.sin(this.spaceTime * m.pulseSpeed + m.pulsePhase);
       const alpha = Math.max(0.1, Math.min(1, m.alpha * pulse));
 
@@ -444,9 +473,9 @@ export class RenderSystem {
       ctx.globalAlpha = alpha;
       ctx.fillStyle = m.color;
       ctx.shadowColor = m.color;
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 10 * detailScale;
       ctx.beginPath();
-      ctx.arc(x, y, m.size, 0, Math.PI * 2);
+      ctx.arc(x, y, m.size * detailScale, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -491,22 +520,12 @@ export class RenderSystem {
     ctx.fill();
     ctx.stroke();
 
-    // Inner mechanical details
-    ctx.strokeStyle = 'rgba(0, 243, 255, 0.4)';
-    ctx.lineWidth = 1.5;
-    this._drawPolygonPath(ctx, 0, 0, render.radius * 0.7, 8, 0);
-    ctx.stroke();
+    // Health is inset into the armor and drawn before the gun, like the reactor.
+    const health = world.getComponent(towerId, HealthComponent);
+    if (health) this._drawTowerHealthRing(ctx, render.radius, health);
 
-    // 4. Rotating energy core
-    const corePulse = 0.85 + Math.sin(this.corePulseAngle) * 0.15;
-    ctx.save();
-    ctx.rotate(this.corePulseAngle * 0.5);
-    ctx.fillStyle = '#00f3ff';
-    ctx.shadowColor = '#00f3ff';
-    ctx.shadowBlur = 15;
-    this._drawPolygonPath(ctx, 0, 0, render.radius * 0.35 * corePulse, 4, 0);
-    ctx.fill();
-    ctx.restore();
+    // 4. Anchored reactor: a fixed socket and softly breathing energy lens.
+    this._drawReactorCore(ctx, render.radius);
 
     // 5. Weapon turret barrel pointing towards rotation (single railgun cannon)
     ctx.rotate(trans.rotation);
@@ -517,8 +536,8 @@ export class RenderSystem {
     ctx.shadowBlur = 10;
 
     // Single centered railgun barrel
-    const barrelLength = render.radius + 14;
-    const barrelWidth = 6;
+    const barrelLength = render.radius + GameConfig.tower.barrelExtension;
+    const barrelWidth = GameConfig.tower.barrelWidth;
     const halfWidth = barrelWidth / 2;
 
     // Turret barrel mount / shroud
@@ -547,46 +566,96 @@ export class RenderSystem {
     ctx.restore();
   }
 
-  _drawTowerMiniHealthBar(ctx, world) {
-    const towers = world.getEntitiesWith(TowerComponent, TransformComponent, RenderComponent, HealthComponent);
-    if (towers.length === 0) return;
-
-    const towerId = towers[0];
-    const trans = world.getComponent(towerId, TransformComponent);
-    const render = world.getComponent(towerId, RenderComponent);
-    const health = world.getComponent(towerId, HealthComponent);
-    if (!trans || !health) return;
-
-    const x = trans.x;
-    const y = trans.y + (render ? render.radius : 26) + 12;
-    const barWidth = 52;
-    const barHeight = 5;
-    const halfW = barWidth / 2;
-    const pct = Math.max(0, Math.min(1, health.current / health.max));
-
+  _drawReactorCore(ctx, radius) {
+    const socketRadius = radius * 0.48;
+    const lensRadius = radius * 0.25;
+    const pulse = 0.9 + Math.sin(this.corePulseAngle) * 0.1;
     ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#03131f';
+    ctx.strokeStyle = '#286c7b';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(0, 0, socketRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
 
-    // High-contrast cyber background with dark stroke
-    ctx.fillStyle = 'rgba(5, 8, 14, 0.9)';
-    ctx.fillRect(x - halfW - 1, y - 1, barWidth + 2, barHeight + 2);
-
-    ctx.strokeStyle = 'rgba(0, 243, 255, 0.45)';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x - halfW - 1, y - 1, barWidth + 2, barHeight + 2);
-
-    // Dynamic glowing health fill: green -> yellow -> red alert
-    let fillColor = '#00ff88';
-    if (pct <= 0.25) {
-      fillColor = '#ff0055';
-    } else if (pct <= 0.5) {
-      fillColor = '#ffe600';
+    // Fixed segmented conductors make the reactor feel built into the chassis.
+    ctx.strokeStyle = `rgba(81, 231, 235, ${0.65 * pulse})`;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 3; i++) {
+      const start = i * Math.PI * 2 / 3 + 0.22;
+      ctx.beginPath();
+      ctx.arc(0, 0, socketRadius * 0.77, start, start + 1.35);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#80d7df';
+    for (let i = 0; i < 6; i++) {
+      const angle = i * Math.PI / 3;
+      ctx.beginPath();
+      ctx.arc(Math.cos(angle) * socketRadius, Math.sin(angle) * socketRadius, 0.75, 0, Math.PI * 2);
+      ctx.fill();
     }
 
-    ctx.fillStyle = fillColor;
-    ctx.shadowColor = fillColor;
-    ctx.shadowBlur = 8;
-    ctx.fillRect(x - halfW, y, barWidth * pct, barHeight);
+    const lens = ctx.createRadialGradient(-lensRadius * 0.2, -lensRadius * 0.2, 0, 0, 0, lensRadius);
+    lens.addColorStop(0, '#efffff');
+    lens.addColorStop(0.25, '#a5ffff');
+    lens.addColorStop(0.65, '#20d5df');
+    lens.addColorStop(1, '#07526a');
+    ctx.globalAlpha = pulse;
+    ctx.shadowColor = '#2ae3ef';
+    ctx.shadowBlur = 7;
+    ctx.fillStyle = lens;
+    ctx.beginPath();
+    ctx.arc(0, 0, lensRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
+  _drawTowerHealthRing(ctx, radius, health) {
+    const ratio = getHealthRatio(health.current, health.max);
+    const color = getHealthColor(ratio);
+    const ringRadius = radius * 0.78;
+    const segments = 24;
+    const step = Math.PI * 2 / segments;
+    const gap = 0.055;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.lineCap = 'butt';
+
+    // Recessed channel and fine metal lips, entirely inside the armor silhouette.
+    ctx.strokeStyle = '#030c14';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.arc(0, 0, ringRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = '#385260';
+    ctx.lineWidth = 0.65;
+    for (const lip of [-3, 3]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, ringRadius + lip, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Empty cells stay visible; the final lit cell drains continuously.
+    ctx.lineWidth = 3;
+    for (let i = 0; i < segments; i++) {
+      const start = -Math.PI / 2 + i * step + gap / 2;
+      const span = step - gap;
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#1c333d';
+      ctx.beginPath();
+      ctx.arc(0, 0, ringRadius, start, start + span);
+      ctx.stroke();
+      const filled = Math.max(0, Math.min(1, ratio * segments - i));
+      if (filled === 0) continue;
+      ctx.strokeStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, ringRadius, start, start + span * filled);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -661,19 +730,6 @@ export class RenderSystem {
       ctx.lineTo(x2, y2);
       ctx.stroke();
     }
-
-    // 5. Tactical range readout pill
-    const tagAngle = -Math.PI / 2 + 0.38;
-    const tagX = cx + (range + 16) * Math.cos(tagAngle);
-    const tagY = cy + (range + 16) * Math.sin(tagAngle);
-
-    ctx.font = '900 11px Orbitron, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#00f3ff';
-    ctx.shadowColor = '#00f3ff';
-    ctx.shadowBlur = 10;
-    ctx.fillText(`ZONE: ${Math.round(range)}px`, tagX, tagY);
 
     ctx.restore();
   }
@@ -1087,10 +1143,15 @@ export class RenderSystem {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.rotation);
-      ctx.globalAlpha = alpha;
+
+      // Soft ambient glow via larger semi-transparent quad (no costly shadowBlur filter)
+      ctx.globalAlpha = alpha * 0.35;
       ctx.fillStyle = p.color;
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 8;
+      const glowSize = p.size * 2;
+      ctx.fillRect(-glowSize / 2, -glowSize / 2, glowSize, glowSize);
+
+      // Core crisp particle
+      ctx.globalAlpha = alpha;
       ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
       ctx.restore();
     }
@@ -1129,10 +1190,14 @@ export class RenderSystem {
       ctx.shadowBlur = 0; // clear shadow for crisp border
       ctx.strokeText(ft.text, ft.x, ft.y);
 
-      // 2. Bright glowing fill
+      // 2. Bright glowing fill (shadowBlur enabled only for crits)
       ctx.fillStyle = ft.color;
-      ctx.shadowColor = ft.color;
-      ctx.shadowBlur = ft.isCrit ? 16 : 8;
+      if (ft.isCrit) {
+        ctx.shadowColor = ft.color;
+        ctx.shadowBlur = 16;
+      } else {
+        ctx.shadowBlur = 0;
+      }
       ctx.fillText(ft.text, ft.x, ft.y);
 
       ctx.restore();

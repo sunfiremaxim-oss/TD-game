@@ -9,9 +9,11 @@ import { GameConfig } from './config/GameConfig.js';
 
 // Components
 import { TransformComponent } from './components/TransformComponent.js';
+import { VelocityComponent } from './components/VelocityComponent.js';
 import { CircleColliderComponent } from './components/CircleColliderComponent.js';
 import { HealthComponent } from './components/HealthComponent.js';
 import { ArmorComponent } from './components/ArmorComponent.js';
+import { DefenseComponent } from './components/DefenseComponent.js';
 import { AttackComponent } from './components/AttackComponent.js';
 import { TargetComponent } from './components/TargetComponent.js';
 import { RenderComponent } from './components/RenderComponent.js';
@@ -21,22 +23,22 @@ import { EnemyComponent } from './components/EnemyComponent.js';
 import { ProjectileComponent } from './components/ProjectileComponent.js';
 
 // Systems
-import { MovementSystem } from './systems/MovementSystem.js?v=2.3';
-import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=2.3';
-import { TargetingSystem } from './systems/TargetingSystem.js?v=2.3';
-import { SniperAISystem } from './systems/SniperAISystem.js?v=2.3';
-import { WeaponSystem } from './systems/WeaponSystem.js?v=2.3';
-import { CollisionSystem } from './systems/CollisionSystem.js?v=2.3';
-import { DamageSystem } from './systems/DamageSystem.js?v=2.3';
-import { WaveSystem } from './systems/WaveSystem.js?v=2.3';
-import { EconomySystem } from './systems/EconomySystem.js?v=2.3';
-import { ParticleSystem } from './systems/ParticleSystem.js?v=2.3';
-import { AudioSystem } from './systems/AudioSystem.js?v=2.3';
-import { RenderSystem } from './systems/RenderSystem.js?v=2.3';
+import { MovementSystem } from './systems/MovementSystem.js?v=2.36';
+import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=2.36';
+import { TargetingSystem } from './systems/TargetingSystem.js?v=2.36';
+import { SniperAISystem } from './systems/SniperAISystem.js?v=2.36';
+import { WeaponSystem } from './systems/WeaponSystem.js?v=2.36';
+import { CollisionSystem } from './systems/CollisionSystem.js?v=2.36';
+import { DamageSystem } from './systems/DamageSystem.js?v=2.36';
+import { WaveSystem } from './systems/WaveSystem.js?v=2.36';
+import { EconomySystem } from './systems/EconomySystem.js?v=2.36';
+import { ParticleSystem } from './systems/ParticleSystem.js?v=2.36';
+import { AudioSystem } from './systems/AudioSystem.js?v=2.36';
+import { RenderSystem } from './systems/RenderSystem.js?v=2.36';
 
 // Managers & UI
-import { UpgradeManager } from './managers/UpgradeManager.js?v=2.3';
-import { UIManager } from './ui/UIManager.js?v=2.3';
+import { UpgradeManager } from './managers/UpgradeManager.js?v=2.36';
+import { UIManager } from './ui/UIManager.js?v=2.36';
 
 class GameApp {
   constructor() {
@@ -62,6 +64,8 @@ class GameApp {
 
     // 1. Resize and orientation handling (multi-stage delay for mobile reflow)
     window.addEventListener('resize', () => this._resizeCanvas());
+    window.visualViewport?.addEventListener('resize', () => this._resizeCanvas());
+    document.addEventListener('visibilitychange', () => this._handleVisibilityChange());
     window.addEventListener('orientationchange', () => {
       this._resizeCanvas();
       setTimeout(() => this._resizeCanvas(), 100);
@@ -95,7 +99,7 @@ class GameApp {
 
     // Prevent mobile swipe-to-refresh / pull-to-refresh on non-scrollable game surfaces
     document.addEventListener('touchmove', (e) => {
-      if (!e.target.closest('#upgrades-list, .intel-grid, .help-scroll-body')) {
+      if (!e.target.closest('#upgrades-list, .intel-grid, .help-scroll-body, #volume-popover, [data-scrollable]')) {
         e.preventDefault();
       }
     }, { passive: false });
@@ -104,33 +108,91 @@ class GameApp {
     this._startLoop();
   }
 
+  _handleVisibilityChange() {
+    if (document.hidden && this.gameState === 'PLAYING' && this.world && !this.world.isGameOver && !this.world.isPaused) {
+      this.uiManager?.togglePause();
+    }
+  }
+
   _resizeCanvas() {
     const wrapper = document.getElementById('canvas-wrapper');
     if (!wrapper || !this.canvas) return;
 
-    const width = wrapper.clientWidth || GameConfig.canvas.width;
-    const height = wrapper.clientHeight || GameConfig.canvas.height;
-
-    this.canvas.width = width;
-    this.canvas.height = height;
+    const width = wrapper.clientWidth;
+    const height = wrapper.clientHeight;
+    // Hidden/transitioning containers must not teleport the world to fallback dimensions.
+    if (width <= 0 || height <= 0) return;
+    // Cap the backing buffer on Retina screens to keep fill cost bounded on mobile GPUs.
+    const pixelRatio = Math.max(1, Math.min(window.devicePixelRatio || 1, 2, Math.sqrt(1500000 / (width * height))));
+    const bufferWidth = Math.round(width * pixelRatio);
+    const bufferHeight = Math.round(height * pixelRatio);
+    if (this.canvas.width !== bufferWidth) this.canvas.width = bufferWidth;
+    if (this.canvas.height !== bufferHeight) this.canvas.height = bufferHeight;
+    this.canvas.viewportWidth = width;
+    this.canvas.viewportHeight = height;
+    this.canvas.pixelRatio = pixelRatio;
 
     if (this.world) {
-      this.world.width = width;
-      this.world.height = height;
+      const prevLogicalWidth = this.world.width;
+      const prevLogicalHeight = this.world.height;
 
-      // Keep tower centered on resize and clamp range to canvas bounds in any orientation
+      if (Math.min(width, height) < 640) {
+        this.world.renderScale = Math.min(width, height) / 640;
+      } else {
+        this.world.renderScale = 1.0;
+      }
+      const newLogicalWidth = width / this.world.renderScale;
+      const newLogicalHeight = height / this.world.renderScale;
+
+      this.world.width = newLogicalWidth;
+      this.world.height = newLogicalHeight;
+
+      if (prevLogicalWidth && prevLogicalHeight && prevLogicalWidth > 0 && prevLogicalHeight > 0 &&
+          (prevLogicalWidth !== newLogicalWidth || prevLogicalHeight !== newLogicalHeight)) {
+        const scaleX = newLogicalWidth / prevLogicalWidth;
+        const scaleY = newLogicalHeight / prevLogicalHeight;
+
+        // 1. Rescale all entity transforms proportionally to canvas changes
+        const transforms = this.world.getEntitiesWith(TransformComponent);
+        for (const id of transforms) {
+          const trans = this.world.getComponent(id, TransformComponent);
+          if (trans) {
+            trans.x *= scaleX;
+            trans.y *= scaleY;
+          }
+        }
+
+        // 2. Rescale in-flight projectile start points & velocities
+        const projectiles = this.world.getEntitiesWith(ProjectileComponent);
+        for (const id of projectiles) {
+          const proj = this.world.getComponent(id, ProjectileComponent);
+          if (proj) {
+            proj.originX *= scaleX;
+            proj.originY *= scaleY;
+          }
+          const vel = this.world.getComponent(id, VelocityComponent);
+          if (vel) {
+            vel.vx *= scaleX;
+            vel.vy *= scaleY;
+          }
+        }
+
+        // 3. Rescale visual particle effects & damage popups
+        if (this.particleSystem && typeof this.particleSystem.rescale === 'function') {
+          this.particleSystem.rescale(scaleX, scaleY);
+        }
+      }
+
+      // Keep tower centered on resize
       const towers = this.world.getEntitiesWith(TowerComponent, TransformComponent);
       if (towers.length > 0) {
         const trans = this.world.getComponent(towers[0], TransformComponent);
-        trans.x = width / 2;
-        trans.y = height / 2;
+        trans.x = this.world.width / 2;
+        trans.y = this.world.height / 2;
 
         const attack = this.world.getComponent(towers[0], AttackComponent);
         if (attack && this.upgradeManager) {
-          const upgradeVal = this.upgradeManager.getCurrentValue('range');
-          const halfDim = Math.min(width, height) / 2;
-          const maxScreenRange = Math.floor(halfDim - 20);
-          attack.range = Math.min(upgradeVal, Math.max(GameConfig.tower.baseRange, maxScreenRange));
+          attack.range = this.upgradeManager.getCurrentValue('range');
         }
       }
     }
@@ -139,9 +201,10 @@ class GameApp {
   _setupECS() {
     // 1. Create World and Managers
     this.world = new World();
-    this.world.width = this.canvas.width;
-    this.world.height = this.canvas.height;
+    this.world.width = this.canvas.viewportWidth || this.canvas.width;
+    this.world.height = this.canvas.viewportHeight || this.canvas.height;
     this.world.inMenu = true;
+    this._resizeCanvas();
 
     this.upgradeManager = new UpgradeManager();
     this.particleSystem = new ParticleSystem();
@@ -161,6 +224,7 @@ class GameApp {
     this.world.registerSystem(this.particleSystem);
     this.world.registerSystem(this.audioSystem);
     this.world.registerSystem(this.renderSystem);
+    this.upgradeManager.init(this.world);
 
     // 3. Create Central Tower Entity (visible in menu background)
     this._createTowerEntity();
@@ -295,8 +359,8 @@ class GameApp {
 
     const armor = this.world.getComponent(towerId, ArmorComponent);
     if (armor) {
-      armor.percent = towerCfg.basePercentArmor;
-      armor.flat = towerCfg.baseFlatArmor;
+      armor.percentReduction = towerCfg.basePercentArmor;
+      armor.flatReduction = towerCfg.baseFlatArmor;
     }
 
     const attack = this.world.getComponent(towerId, AttackComponent);
@@ -305,25 +369,28 @@ class GameApp {
       attack.attackSpeed = towerCfg.baseAttackSpeed;
       attack.range = towerCfg.baseRange;
       attack.cooldown = 0;
+      attack.aimHoldRemaining = 0;
       attack.critChance = towerCfg.baseCritChance;
       attack.critMultiplier = towerCfg.baseCritMultiplier;
       attack.multishotCount = towerCfg.baseMultishotCount;
       attack.multishotChance = towerCfg.baseMultishotChance;
-      attack.distanceBonus = towerCfg.baseDistanceDamageCoeff || 0.001;
+      attack.distanceBonus = towerCfg.baseDistanceDamageCoeff || 0;
+      attack.rapidFireRemaining = 0;
     }
 
     const economy = this.world.getComponent(towerId, EconomyComponent);
     if (economy) {
       economy.credits = towerCfg.startCredits;
-      economy.waveBonus = 1.0;
-      economy.killBonus = 1.0;
+      economy.killMultiplier = 1.0;
+      economy.waveMultiplier = 1.0;
     }
 
     const target = this.world.getComponent(towerId, TargetComponent);
     if (target) {
       target.targetEntityId = null;
-      target.strategy = 'closest';
     }
+    this.world.addComponent(towerId, new DefenseComponent());
+    this.upgradeManager.applyAll(this.world, towerId);
   }
 
   _createTowerEntity() {
@@ -337,6 +404,7 @@ class GameApp {
     this.world.addComponent(towerId, new CircleColliderComponent(towerCfg.colliderRadius, 1000, true)); // isStatic: true
     this.world.addComponent(towerId, new HealthComponent(towerCfg.baseHealth, towerCfg.baseHealth, towerCfg.baseRegen));
     this.world.addComponent(towerId, new ArmorComponent(towerCfg.basePercentArmor, towerCfg.baseFlatArmor));
+    this.world.addComponent(towerId, new DefenseComponent());
     this.world.addComponent(towerId, new AttackComponent(
       towerCfg.baseDamage,
       towerCfg.baseAttackSpeed,
@@ -346,9 +414,9 @@ class GameApp {
       towerCfg.baseCritMultiplier,
       towerCfg.baseMultishotCount,
       towerCfg.baseMultishotChance,
-      towerCfg.baseDistanceDamageCoeff || 0.001
+      towerCfg.baseDistanceDamageCoeff || 0
     ));
-    this.world.addComponent(towerId, new TargetComponent(null, 'closest'));
+    this.world.addComponent(towerId, new TargetComponent());
     this.world.addComponent(towerId, new RenderComponent(
       'tower',
       8,
@@ -358,6 +426,7 @@ class GameApp {
       14
     ));
     this.world.addComponent(towerId, new EconomyComponent(towerCfg.startCredits, 1.0, 1.0));
+    this.upgradeManager.applyAll(this.world, towerId);
 
     return towerId;
   }
@@ -400,13 +469,14 @@ class GameApp {
   _loop(timestamp) {
     const rawDelta = (timestamp - this.lastTime) / 1000;
     this.lastTime = timestamp;
+    this.uiManager?.updateFps(timestamp);
 
     // Strict delta time clamping to prevent physics explosions / NaN on tab changes or system lag
     const validDelta = (isFinite(rawDelta) && rawDelta >= 0) ? rawDelta : 0.016;
     const deltaTime = Math.min(0.1, validDelta);
 
     if (this.gameState === 'MENU') {
-      // In menu state: keep background cosmos, particles, and tower core rotating smoothly
+      // In menu state: keep background cosmos, particles, and the reactor pulse animated.
       this.renderSystem.update(this.world, deltaTime);
       this.particleSystem.update(this.world, deltaTime);
     } else {

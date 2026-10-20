@@ -1,7 +1,7 @@
 /**
  * AudioSystem.js
  * Procedural Web Audio API sound synthesizer driven by EventBus events.
- * Manages dual-channel audio control (SFX and BGM) with volume cycling,
+ * Manages dual-channel audio control (SFX and BGM) with continuous volume control,
  * mute toggling, and instant autoplay unlocking from the very start of the game loop.
  */
 
@@ -10,11 +10,11 @@ export class AudioSystem {
     this.audioCtx = null;
     this.sfxMasterGain = null;
 
-    // SFX channel state (100% -> 60% -> 30% -> 0% / MUTE -> 100%)
+    // SFX channel state (0..1)
     this.sfxVolume = 1.0;
     this.sfxMuted = false;
 
-    // BGM channel state (100% -> 60% -> 30% -> 0% / MUTE -> 100%)
+    // BGM channel state (0..1)
     this.baseBgmVolume = 0.38; // Balanced background level relative to SFX
     this.bgmVolumeFactor = 1.0;
     this.bgmMuted = false;
@@ -395,11 +395,9 @@ export class AudioSystem {
   // =========================================================================
 
   // SFX Channel
-  cycleSfxVolume() {
-    const levels = [1.0, 0.6, 0.3, 0.0];
-    const currentIndex = levels.findIndex(lvl => Math.abs(lvl - this.sfxVolume) < 0.05);
-    const nextIndex = (currentIndex + 1) % levels.length;
-    this.sfxVolume = levels[nextIndex];
+  setSfxVolume(value) {
+    if (!Number.isFinite(value)) return this.getSfxLabel();
+    this.sfxVolume = Math.max(0, Math.min(1, value));
     this.sfxMuted = this.sfxVolume === 0;
     this._updateSfxGain();
     this.unlockAudio();
@@ -418,12 +416,12 @@ export class AudioSystem {
 
   getSfxLabel() {
     if (this.sfxMuted || this.sfxVolume === 0) {
-      return { icon: '🔇', text: 'ЗВУК ВЫКЛ', title: 'Звуки игры: ВЫКЛ (Клик: изменить громкость, ПКМ: вкл)', isMuted: true };
+      return { icon: '🔇', text: 'ЗВУК ВЫКЛ', title: 'Звуки игры: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)', isMuted: true };
     }
     const pct = Math.round(this.sfxVolume * 100);
     const icon = pct > 70 ? '🔊' : (pct > 30 ? '🔉' : '🔈');
     const text = pct === 100 ? 'ЗВУК' : `ЗВУК ${pct}%`;
-    return { icon, text, title: `Звуки игры: ${pct}% (Клик: изменить громкость, ПКМ: выкл)`, isMuted: false };
+    return { icon, text, title: `Звуки игры: ${pct}% (Клик: открыть слайдер, ПКМ: выкл)`, isMuted: false };
   }
 
   _updateSfxGain() {
@@ -438,11 +436,9 @@ export class AudioSystem {
   }
 
   // Music Channel
-  cycleBgmVolume() {
-    const levels = [1.0, 0.6, 0.3, 0.0];
-    const currentIndex = levels.findIndex(lvl => Math.abs(lvl - this.bgmVolumeFactor) < 0.05);
-    const nextIndex = (currentIndex + 1) % levels.length;
-    this.bgmVolumeFactor = levels[nextIndex];
+  setBgmVolume(value) {
+    if (!Number.isFinite(value)) return this.getBgmLabel();
+    this.bgmVolumeFactor = Math.max(0, Math.min(1, value));
     this.bgmMuted = this.bgmVolumeFactor === 0;
     this._updateBgmVolume();
     this.unlockAudio();
@@ -461,12 +457,12 @@ export class AudioSystem {
 
   getBgmLabel() {
     if (this.bgmMuted || this.bgmVolumeFactor === 0) {
-      return { icon: '🔇', text: 'МУЗЫКА ВЫКЛ', title: 'Фоновая музыка: ВЫКЛ (Клик: включить, ПКМ: вкл)', isMuted: true };
+      return { icon: '🔇', text: 'МУЗЫКА ВЫКЛ', title: 'Фоновая музыка: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)', isMuted: true };
     }
     const pct = Math.round(this.bgmVolumeFactor * 100);
     const icon = pct > 50 ? '🎵' : '🎶';
     const text = pct === 100 ? 'МУЗЫКА' : `МУЗЫКА ${pct}%`;
-    return { icon, text, title: `Фоновая музыка: ${pct}% (Клик: изменить громкость, ПКМ: выкл)`, isMuted: false };
+    return { icon, text, title: `Фоновая музыка: ${pct}% (Клик: открыть слайдер, ПКМ: выкл)`, isMuted: false };
   }
 
   // Master toggle (backward compatibility)

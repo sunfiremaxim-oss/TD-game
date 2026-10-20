@@ -13,6 +13,7 @@ import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { CircleColliderComponent } from '../components/CircleColliderComponent.js';
 import { RenderComponent } from '../components/RenderComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { HealthComponent } from '../components/HealthComponent.js';
 
 export class SniperAISystem {
   update(world, deltaTime) {
@@ -47,6 +48,7 @@ export class SniperAISystem {
     for (const sniperId of snipers) {
       if (world.destructionQueue.has(sniperId)) continue;
       const enemy = world.getComponent(sniperId, EnemyComponent);
+      if (enemy.knockbackRemaining > 0) continue;
       const sniperTrans = world.getComponent(sniperId, TransformComponent);
       const velocity = world.getComponent(sniperId, VelocityComponent);
 
@@ -111,7 +113,7 @@ export class SniperAISystem {
 
     world.addComponent(projId, new TransformComponent(sniperTrans.x, sniperTrans.y, angle));
     world.addComponent(projId, new VelocityComponent(vx, vy, speed, speed));
-    world.addComponent(projId, new ProjectileComponent(
+    const projectile = new ProjectileComponent(
       sniperId,
       towerId,
       0,
@@ -119,7 +121,9 @@ export class SniperAISystem {
       damage,
       false, // isCrit
       true   // isEnemy = true
-    ));
+    );
+    projectile.sourceHealth = world.getComponent(sniperId, HealthComponent);
+    world.addComponent(projId, projectile);
     world.addComponent(projId, new CircleColliderComponent(5, 0.1, false));
     world.addComponent(projId, new RenderComponent(
       'projectile',

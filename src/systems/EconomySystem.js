@@ -39,8 +39,10 @@ export class EconomySystem {
 
       const baseBonus = GameConfig.waves.waveBaseReward || 50;
       const growth = GameConfig.waves.waveRewardGrowth || 25;
-      const rawBonus = baseBonus + (event.wave || 1) * growth;
-      const earned = Math.round(rawBonus * (eco.waveMultiplier || 1.0));
+      const wave = event.wave || 1;
+      const rawBonus = baseBonus + wave * growth;
+      const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, wave - 1));
+      const earned = Math.round(rawBonus * rewardMultiplier * (eco.waveMultiplier || 1.0));
 
       eco.credits += earned;
 
@@ -53,6 +55,7 @@ export class EconomySystem {
 
     // 3. Purchase deduction
     world.eventBus.on('UPGRADE_PURCHASED', (event) => {
+      if (event.isFree || event.cost <= 0) return;
       const eco = this._getEconomy(world);
       if (!eco) return;
 

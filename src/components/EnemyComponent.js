@@ -43,5 +43,9 @@ export class EnemyComponent {
 
     // Splitter shard scatter burst duration (backward & sideways impulse before homing)
     this.scatterTimer = 0;
+    this.knockbackRemaining = 0;
+    this.knockbackCooldown = 0;
+    this.knockbackVx = 0;
+    this.knockbackVy = 0;
   }
 }

@@ -1,6 +1,6 @@
 /**
  * TargetingSystem.js
- * Scans for enemies within tower range and assigns targets based on strategy.
+ * Tracks the nearest enemy needing damage, including pre-aim outside firing range.
  */
 
 import { TowerComponent } from '../components/TowerComponent.js';
@@ -9,7 +9,9 @@ import { TargetComponent } from '../components/TargetComponent.js';
 import { TransformComponent } from '../components/TransformComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
-import { ProjectileComponent } from '../components/ProjectileComponent.js';
+import { GameConfig } from '../config/GameConfig.js';
+
+import { getExpectedInFlightDamage } from '../combat/DamageCalculation.js?v=2.7';
 
 export class TargetingSystem {
   init(world) {
@@ -35,18 +37,12 @@ export class TargetingSystem {
     const targetComp = world.getComponent(towerId, TargetComponent);
 
     // 1. Calculate in-flight damage targeted at each enemy by active player projectiles
-    const inFlightDamage = new Map();
-    const projEntities = world.getEntitiesWith(ProjectileComponent);
-    for (const pId of projEntities) {
-      const proj = world.getComponent(pId, ProjectileComponent);
-      if (proj && !proj.isEnemy && proj.targetEntityId) {
-        inFlightDamage.set(proj.targetEntityId, (inFlightDamage.get(proj.targetEntityId) || 0) + (proj.damage || 0));
-      }
-    }
+    const inFlightDamage = getExpectedInFlightDamage(world);
 
-    // 2. Get all alive enemies strictly within attack range
+    // 2. Track globally; WeaponSystem alone enforces the firing range.
     const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
-    const candidates = [];
+    let nearest = null;
+    let nearestNeedingDamage = null;
 
     for (const enemyId of enemyEntities) {
       if (world.destructionQueue.has(enemyId)) continue;
@@ -55,44 +51,49 @@ export class TargetingSystem {
 
       if (!enemyHealth || enemyHealth.current <= 0 || !enemyTrans) continue;
 
-      const dist = Math.hypot(enemyTrans.x - towerTrans.x, enemyTrans.y - towerTrans.y);
-      if (dist <= attack.range) {
-        const inFlight = inFlightDamage.get(enemyId) || 0;
-        candidates.push({
-          id: enemyId,
-          dist,
-          health: enemyHealth.current,
-          effectiveHp: enemyHealth.current - inFlight,
-          x: enemyTrans.x,
-          y: enemyTrans.y
-        });
+      const distanceSquared = (enemyTrans.x - towerTrans.x) ** 2 + (enemyTrans.y - towerTrans.y) ** 2;
+      const candidate = { id: enemyId, distanceSquared, x: enemyTrans.x, y: enemyTrans.y };
+      if (!nearest || distanceSquared < nearest.distanceSquared) nearest = candidate;
+      if (enemyHealth.current > (inFlightDamage.get(enemyId) || 0) &&
+          (!nearestNeedingDamage || distanceSquared < nearestNeedingDamage.distanceSquared)) {
+        nearestNeedingDamage = candidate;
       }
     }
 
-    if (candidates.length === 0) {
+    const chosen = nearestNeedingDamage || nearest;
+    if (!chosen) {
       targetComp.targetEntityId = null;
       return;
     }
 
-    // 3. Predictive targeting: prioritize enemies that still need damage (effectiveHp > 0)
-    const needyCandidates = candidates.filter(c => c.effectiveHp > 0);
-    const pool = needyCandidates.length > 0 ? needyCandidates : candidates;
-
-    // 4. Sort pool according to active strategy
-    const strategy = targetComp.strategy || 'closest';
-    if (strategy === 'closest') {
-      pool.sort((a, b) => a.dist - b.dist);
-    } else if (strategy === 'strongest') {
-      pool.sort((a, b) => b.health - a.health);
-    } else if (strategy === 'weakest') {
-      pool.sort((a, b) => a.health - b.health);
-    }
-
-    const chosen = pool[0];
     targetComp.targetEntityId = chosen.id;
 
-    // Rotate tower gun towards target
+    // Pre-aim between shots. Firing deadlines take priority over the normal turn rate.
     const angle = Math.atan2(chosen.y - towerTrans.y, chosen.x - towerTrans.x);
-    towerTrans.rotation = angle;
+    const canFire = Boolean(nearestNeedingDamage) && chosen.distanceSquared <= attack.range ** 2;
+    this._rotateTowardsTarget(towerTrans, attack, angle, deltaTime, canFire);
+  }
+
+  _rotateTowardsTarget(transform, attack, angle, deltaTime, canFire) {
+    const difference = Math.atan2(Math.sin(angle - transform.rotation), Math.cos(angle - transform.rotation));
+    // Use exactly the same baseline attack-time advance as WeaponSystem,
+    // including the partial frame in which rapid fire expires.
+    const boostedTime = Math.min(deltaTime, attack.rapidFireRemaining);
+    const attackTime = deltaTime + boostedTime * (GameConfig.combat.rapidFireMultiplier - 1);
+    // WeaponSystem owns the timer, including frames with no target. Only the
+    // portion after the post-shot hold may be used to turn this frame.
+    const heldTime = Math.min(attackTime, attack.aimHoldRemaining);
+    const turnTime = attackTime - heldTime;
+    const normalStep = Math.PI * Math.max(0.1, attack.attackSpeed) * turnTime / GameConfig.tower.aimTurnIntervalFraction;
+    // A late target switch must finish by the existing shot time; never add an aiming cooldown.
+    const remainingAfterHold = attack.cooldown - heldTime;
+    const deadlineStep = !canFire ? 0 : remainingAfterHold > 0
+      ? Math.abs(difference) * Math.min(1, turnTime / remainingAfterHold)
+      : Math.abs(difference);
+    const step = Math.max(normalStep, deadlineStep);
+    transform.rotation = step >= Math.abs(difference)
+      ? angle
+      : Math.atan2(Math.sin(transform.rotation + Math.sign(difference) * step),
+        Math.cos(transform.rotation + Math.sign(difference) * step));
   }
 }

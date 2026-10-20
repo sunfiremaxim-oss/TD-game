@@ -7,6 +7,7 @@
 import { TransformComponent } from '../components/TransformComponent.js';
 import { CircleColliderComponent } from '../components/CircleColliderComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
+import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
 
 export class PhysicsSeparationSystem {
@@ -15,7 +16,8 @@ export class PhysicsSeparationSystem {
     const dynamicColliders = world.getEntitiesWith(TransformComponent, CircleColliderComponent)
       .filter(id => {
         const col = world.getComponent(id, CircleColliderComponent);
-        return !col.isStatic;
+        // Projectiles use their colliders for hit detection, never body separation.
+        return !col.isStatic && !world.hasComponent(id, ProjectileComponent);
       });
 
     const count = dynamicColliders.length;

@@ -10,12 +10,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/battle.css?v=2.36">
 </head>
 <body>
-  <div id="game-app" class="in-menu">
+  <div id="game-app" class="in-menu battle-layout">
     <!-- MAIN MENU OVERLAY -->
     <div id="main-menu" class="menu-overlay">
-      <div class="menu-panel">
+      <div class="menu-panel" data-scrollable>
         <div class="menu-header">
           <div class="menu-protocol-tag">
             <span class="pulse-dot"></span>
@@ -68,93 +69,66 @@
       </div>
     </div>
 
-    <!-- TOP STATUS HUD -->
-    <header id="top-hud">
-      <div class="hud-group">
-        <div id="hud-wave" class="hud-badge">ВОЛНА 01</div>
-        <div id="hud-enemies" class="hud-badge enemies">ВРАГИ: 0</div>
-      </div>
-
-      <!-- 5-SECOND INTERMISSION COUNTDOWN BAR -->
-      <div id="intermission-container" class="hidden">
-        <div id="intermission-text">ПЕРЕРЫВ: 5.0s (ВОЛНА 02)</div>
-        <div class="intermission-bar-bg">
-          <div id="intermission-bar"></div>
-        </div>
-      </div>
-
-      <!-- CREDITS & HEALTH -->
-      <div class="hud-group">
-        <div id="hud-credits" class="hud-credits">100 ◈</div>
-        
-        <div class="hp-container">
-          <div class="hp-bar-bg">
-            <div id="hud-hp-fill"></div>
-          </div>
-          <div id="hud-hp-text">600 / 600 (+1.0/с)</div>
-        </div>
-
-        <div class="speed-controls" id="speed-controls">
-          <button id="btn-pause" class="speed-btn pause-btn" title="Пауза (Пробел / P)">⏸</button>
-          <button id="btn-speed-1" class="speed-btn active" data-speed="1" title="Скорость 1x (1)">1x</button>
-          <button id="btn-speed-2" class="speed-btn" data-speed="2" title="Скорость 2x (2)">2x</button>
-          <button id="btn-speed-3" class="speed-btn" data-speed="3" title="Скорость 3x (3)">3x</button>
-        </div>
-
-        <button id="btn-to-menu" class="icon-btn menu-nav-btn" title="Главное меню (Пауза)">
-          <span class="menu-icon">☰</span>
-          <span class="menu-label">МЕНЮ</span>
-        </button>
-
-        <div class="audio-controls-group">
-          <button id="btn-sound-sfx" class="icon-btn audio-btn" title="Звуки игры: 100% (Клик: изменить громкость, ПКМ: выкл)">
-            <span class="audio-icon">🔊</span>
-            <span class="audio-label">ЗВУК</span>
-          </button>
-          <button id="btn-sound-music" class="icon-btn audio-btn" title="Фоновая музыка: 100% (Клик: изменить громкость, ПКМ: выкл)">
-            <span class="audio-icon">🎵</span>
-            <span class="audio-label">МУЗЫКА</span>
-          </button>
-        </div>
-      </div>
-    </header>
-
-    <!-- MAIN VIEWPORT -->
+    <!-- BATTLE: open arena with a compact status strip and a module deck -->
     <main id="game-viewport">
-      <!-- CANVAS WRAPPER -->
-      <div id="canvas-wrapper">
-        <canvas id="game-canvas"></canvas>
+      <section class="arena-shell" aria-label="Поле боя">
+        <div id="canvas-wrapper">
+          <canvas id="game-canvas"></canvas>
+          <header id="top-hud">
+            <div class="credit-wallet">
+              <span class="wallet-label">КРЕДИТЫ</span>
+              <div id="hud-credits" class="hud-credits">100 ◈</div>
+            </div>
+            <div class="arena-menu-buttons">
+              <button id="btn-to-menu" class="arena-icon-btn" type="button" aria-label="Меню паузы" aria-haspopup="dialog" aria-controls="modal-battle-menu" title="Меню паузы (Esc)">☰</button>
+            </div>
+          </header>
 
-        <!-- TARGET PRIORITY OVERLAY -->
-        <div id="strategy-overlay">
-          <span class="overlay-label">ПРИОРИТЕТ ЦЕЛИ:</span>
-          <div class="strat-buttons">
-            <button id="strat-closest" class="strat-btn active">БЛИЖАЙШИЙ</button>
-            <button id="strat-strongest" class="strat-btn">СИЛЬНЕЙШИЙ</button>
-            <button id="strat-weakest" class="strat-btn">СЛАБЕЙШИЙ</button>
+          <div id="performance-overlay"><span id="fps-counter" hidden>— FPS · — мс</span></div>
+
+          <div class="battle-controls">
+            <div class="speed-controls" id="speed-controls" role="group" aria-label="Управление скоростью игры">
+              <output id="game-speed-value" aria-label="Скорость игры" aria-live="polite">1.0×</output>
+              <div class="speed-buttons">
+                <button id="btn-speed-down" class="speed-step-btn" type="button" aria-label="Уменьшить скорость" disabled>−</button>
+                <button id="btn-pause" class="speed-btn pause-btn" type="button" aria-label="Пауза / продолжить" title="Пауза (Пробел / P)">⏸</button>
+                <button id="btn-speed-up" class="speed-step-btn" type="button" aria-label="Увеличить скорость">+</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- UPGRADE DECK SIDEBAR -->
-      <aside id="sidebar">
-        <div class="sidebar-header">СИСТЕМА УЛУЧШЕНИЙ [14]</div>
-        
-        <div class="tabs-container">
-          <button id="tab-offense" class="tab-btn active">ОРУЖИЕ</button>
-          <button id="tab-defense" class="tab-btn">ЗАЩИТА</button>
-          <button id="tab-utility" class="tab-btn">ЭКОНОМИКА</button>
+        <div id="combat-status">
+          <div class="core-status">
+            <div id="hud-hp-text"><span class="hp-label">HP</span><span class="hp-value"><strong>300</strong> / 300</span><span class="hp-regen">+1.0/с</span></div>
+            <div class="hp-bar-bg"><div id="hud-hp-fill"></div></div>
+          </div>
+          <div class="wave-status">
+            <div class="wave-heading"><span id="hud-wave">ВОЛНА 01</span><span id="hud-enemies">ВРАГИ: 0</span></div>
+            <div class="wave-bar-bg"><div id="hud-wave-fill"></div></div>
+            <div id="intermission-container" class="hidden">
+              <span id="intermission-text">СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ 5.0с</span>
+              <div class="intermission-bar-bg"><div id="intermission-bar"></div></div>
+            </div>
+          </div>
         </div>
+      </section>
 
-        <div id="upgrades-list">
-          <!-- Dynamic cards rendered by UIManager -->
+      <aside id="sidebar" data-category="offense" aria-label="Улучшения ядра">
+        <div id="upgrade-panel">
+          <div id="upgrades-list" aria-label="Доступные улучшения"></div>
+          <nav class="tabs-container" aria-label="Категории улучшений">
+            <button id="tab-offense" class="tab-btn active" type="button" aria-pressed="true">АТАКА</button>
+            <button id="tab-defense" class="tab-btn" type="button" aria-pressed="false">ЗАЩИТА</button>
+            <button id="tab-utility" class="tab-btn" type="button" aria-pressed="false">ЭКОНОМИКА</button>
+          </nav>
         </div>
       </aside>
     </main>
 
     <!-- ENEMY INTEL DATABASE MODAL -->
     <div id="modal-intel" class="modal-backdrop hidden">
-      <div class="modal-content modal-intel-content">
+      <div data-scrollable class="modal-content modal-intel-content">
         <div class="modal-header">
           <h2 class="modal-title cyan-title">БАЗА ДАННЫХ: ПРОТИВНИКИ</h2>
           <button id="btn-intel-close-x" class="modal-close-x">&times;</button>
@@ -186,7 +160,7 @@
                 <span class="intel-badge tank-badge">ТЯЖЁЛЫЙ</span>
               </div>
               <p class="intel-desc">Массивная бронированная крепость. Обладает огромным запасом здоровья и плоской защитой.</p>
-              <div class="intel-tip">СОВЕТ: Прокачивайте урон и критические выстрелы, ставьте приоритет «Сильнейший».</div>
+              <div class="intel-tip">СОВЕТ: Прокачивайте урон и критические атаки, чтобы быстрее пробивать большой запас HP.</div>
             </div>
           </div>
 
@@ -286,43 +260,42 @@
 
     <!-- HOW TO PLAY / RULES MODAL -->
     <div id="modal-help" class="modal-backdrop hidden">
-      <div class="modal-content modal-help-content">
+      <div data-scrollable class="modal-content modal-help-content">
         <div class="modal-header">
           <h2 class="modal-title cyan-title">РУКОВОДСТВО ОБОРОНЫ</h2>
           <button id="btn-help-close-x" class="modal-close-x">&times;</button>
         </div>
         <div class="help-scroll-body">
           <div class="help-section">
+            <h3 class="help-heading">📱 СЕНСОРНОЕ УПРАВЛЕНИЕ</h3>
+          <p>Панель улучшений всегда открыта: выбирайте «Атаку», «Защиту» или «Экономику» и нажимайте на карточку для покупки. Список прокручивается пальцем. Кнопки − и + меняют скорость, а кнопка между ними ставит бой на паузу или продолжает его. Башня автоматически атакует ближайшего врага. Звук, музыка и счётчик FPS доступны в меню паузы. Игра поддерживает обе ориентации экрана и ставится на паузу при сворачивании.</p>
+          </div>
+          <div class="help-section">
             <h3 class="help-heading">🎯 ЦЕЛЬ СИСТЕМЫ</h3>
             <p>Обороняйте центральное ядро башни от нарастающих волн геометрического кибер-роя. Башня ведёт огонь автоматически по целям в своём радиусе.</p>
           </div>
           
           <div class="help-section">
-            <h3 class="help-heading">⚙️ ВЕТКИ УЛУЧШЕНИЙ (14 ПАРАМЕТРОВ)</h3>
+            <h3 class="help-heading">⚙️ ВЕТКИ УЛУЧШЕНИЙ (24 ПАРАМЕТРА)</h3>
             <div class="help-branches">
               <div class="help-branch">
-                <span class="branch-title offense-color">ОРУЖИЕ</span>
-                <p>Урон, скорострельность, дальность атаки, шанс и множитель критического урона, мультишот, урон от дистанции полёта снаряда.</p>
+                <span class="branch-title offense-color">АТАКА</span>
+                <p>Урон, скорострельность, дальность, критические удары, мультишот, рикошеты и временная быстрая атака ×1.5.</p>
               </div>
               <div class="help-branch">
                 <span class="branch-title defense-color">ЗАЩИТА</span>
-                <p>Максимальный запас HP, регенерация в секунду, плоская броня (вычитает урон), процентная броня (снижает входящий урон до 85%).</p>
+                <p>Максимальный запас HP, регенерация, плоская и процентная броня, отражение полученного урона, вампиризм и отталкивание врагов пулями. Тяжёлые враги и боссы сопротивляются отталкиванию.</p>
               </div>
               <div class="help-branch">
                 <span class="branch-title utility-color">ЭКОНОМИКА</span>
-                <p>Базовые кредиты за волну, дополнительная награда за каждое уничтожение, инвестиционная доходность.</p>
+                <p>Бонусы кредитов за убийства и волны. «Бесплатное улучшение атаки / защиты / экономики» — три независимых шанса в конце каждой волны бесплатно повысить одно случайное открытое улучшение соответствующей категории. За волну выдаётся не больше одного уровня в каждой категории; максимальные уровни и зависимости соблюдаются.</p>
               </div>
             </div>
           </div>
 
           <div class="help-section">
-            <h3 class="help-heading">🎯 ПРИОРИТЕТЫ ОГНЯ</h3>
-            <p>Переключайте режим огня башни в левом нижнем углу экрана:</p>
-            <ul class="help-bullets">
-              <li><b>БЛИЖАЙШИЙ</b>: огонь по врагу, подошедшему ближе всего к ядру (рекомендуется по умолчанию).</li>
-              <li><b>СИЛЬНЕЙШИЙ</b>: концентрация огня на цели с наибольшим HP (эффективно против Танков и Боссов).</li>
-              <li><b>СЛАБЕЙШИЙ</b>: добивание раненых целей для быстрого снижения численности атакующих.</li>
-            </ul>
+            <h3 class="help-heading">🎯 АВТОМАТИЧЕСКОЕ НАВЕДЕНИЕ</h3>
+            <p>Башня выбирает ближайшего врага, которому ещё нужен урон. Ствол заранее сопровождает врагов за пределами дальности атаки, а стрельба начинается при входе в радиус. Если летящих пуль уже достаточно для уничтожения цели, башня переключается на следующую.</p>
           </div>
 
           <div class="help-section">
@@ -330,7 +303,7 @@
             <div class="hotkeys-list">
               <div class="hotkey-item"><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <span>Скорость симуляции (1x, 2x, 3x)</span></div>
               <div class="hotkey-item"><kbd>Пробел</kbd> / <kbd>P</kbd> <span>Тактическая пауза игры</span></div>
-              <div class="hotkey-item"><kbd>Клик</kbd> / <kbd>ПКМ</kbd> <span>Регулировка громкости и мгновенное отключение звука/музыки</span></div>
+              <div class="hotkey-item"><kbd>Клик</kbd> / <kbd>ПКМ</kbd> <span>Клик — слайдер громкости звука/музыки, ПКМ — мгновенное отключение</span></div>
             </div>
           </div>
         </div>
@@ -338,24 +311,33 @@
       </div>
     </div>
 
-    <!-- CONFIRM EXIT TO MENU MODAL -->
-    <div id="modal-confirm-menu" class="modal-backdrop hidden">
-      <div class="modal-content">
-        <h2 class="modal-title warning-title">ВЫХОД В МЕНЮ</h2>
-        <div class="modal-body">
-          <p>Текущий бой будет прерван, а не сохраненный прогресс текущей волны сброшен.</p>
-          <p>Вы уверены, что хотите выйти в главное меню?</p>
+    <!-- PAUSE MENU -->
+    <div id="modal-battle-menu" class="modal-backdrop hidden">
+      <div data-scrollable class="modal-content battle-menu" role="dialog" aria-modal="true" aria-labelledby="battle-menu-title">
+        <div class="battle-menu-heading">
+          <span class="battle-menu-eyebrow">БОЙ ПРИОСТАНОВЛЕН</span>
+          <h2 id="battle-menu-title">ПАУЗА</h2>
         </div>
-        <div class="modal-buttons-row">
-          <button id="btn-confirm-resume" class="modal-btn cyan-btn">ПРОДОЛЖИТЬ БОЙ</button>
-          <button id="btn-confirm-exit" class="modal-btn secondary-btn">В ГЛАВНОЕ МЕНЮ</button>
+        <button id="btn-battle-resume" class="modal-btn cyan-btn" type="button">ПРОДОЛЖИТЬ БОЙ</button>
+        <section class="battle-menu-settings" aria-label="Настройки">
+          <h3>НАСТРОЙКИ</h3>
+          <div class="battle-menu-audio">
+            <button id="btn-sound-sfx" class="audio-btn" type="button"><span class="audio-icon">🔊</span><span class="audio-label">ЗВУК</span></button>
+            <button id="btn-sound-music" class="audio-btn" type="button"><span class="audio-icon">🎵</span><span class="audio-label">МУЗЫКА</span></button>
+          </div>
+          <button id="btn-fps" type="button" aria-pressed="false" aria-controls="fps-counter"><span>СЧЁТЧИК FPS</span><span class="fps-switch" aria-hidden="true"></span></button>
+        </section>
+        <div class="battle-menu-actions">
+          <button id="btn-battle-restart" class="modal-btn secondary-btn" type="button">НАЧАТЬ ЗАНОВО</button>
+          <button id="btn-battle-exit" class="modal-btn secondary-btn" type="button">В ГЛАВНОЕ МЕНЮ</button>
         </div>
+        <p class="battle-menu-note">Перезапуск и выход сбросят прогресс боя.</p>
       </div>
     </div>
 
     <!-- GAME OVER MODAL -->
     <div id="modal-gameover" class="modal-backdrop hidden">
-      <div class="modal-content">
+      <div data-scrollable class="modal-content">
         <h2 class="modal-title">СИСТЕМА СБИТА</h2>
         <div class="modal-body">
           <p>Центральное ядро уничтожено роем.</p>
@@ -369,7 +351,16 @@
     </div>
   </div>
 
+  <div id="volume-popover" role="group" aria-labelledby="volume-label" hidden>
+    <div class="volume-heading">
+      <label id="volume-label" for="volume-slider">ГРОМКОСТЬ</label>
+      <output id="volume-value" for="volume-slider">100%</output>
+    </div>
+    <input id="volume-slider" type="range" min="0" max="100" step="1" value="100">
+    <button id="volume-mute" type="button">ВЫКЛЮЧИТЬ</button>
+  </div>
+
   <!-- ENTRY MODULE -->
-  <script type="module" src="src/main.js?v=2.3"></script>
+  <script type="module" src="src/main.js?v=2.36"></script>
 </body>
 </html>

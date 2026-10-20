@@ -19,10 +19,16 @@ export class AttackComponent {
     this.attackSpeed = attackSpeed;
     this.range = range;
     this.cooldown = cooldown;
+    this.aimHoldRemaining = 0; // Baseline attack seconds, advanced together with cooldown.
     this.critChance = critChance;
     this.critMultiplier = critMultiplier;
     this.multishotCount = multishotCount;
     this.multishotChance = multishotChance;
     this.distanceBonus = distanceBonus;
+    this.ricochetChance = 0;
+    this.ricochetCount = 1;
+    this.rapidFireChance = 0;
+    this.rapidFireDuration = 0.5;
+    this.rapidFireRemaining = 0;
   }
 }
