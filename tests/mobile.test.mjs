@@ -18,7 +18,7 @@ function appSetup() {
   const wrapper = { clientWidth: 390, clientHeight: 650 };
   const document = { hidden: false, readyState: 'loading', getElementById: () => wrapper };
   const window = { devicePixelRatio: 3, addEventListener() {} };
-  const context = vm.createContext({ ...imports, document, window });
+  const context = vm.createContext({ ...imports, document, window, performance });
   vm.runInContext(source.replace(/import\s+[^;]+;\s*/g, '') + '\nthis.GameApp = GameApp;', context);
   const app = Object.create(context.GameApp.prototype);
   Object.assign(app, { canvas: {}, world: new World(), gameState: 'PLAYING' });
@@ -80,7 +80,7 @@ test('restart resets new combat stats, temporary rapid fire, lifesteal budget an
   assert.equal(health.max, 300);
   assert.equal(health.current, 300);
   app.upgradeManager.levels.set('maxHealth', 3);
-  for (const id of ['ricochetChance', 'rapidFireChance', 'lifeSteal', 'damageReflection', 'knockbackChance', 'freeAttackChance']) {
+  for (const id of ['ricochetChance', 'rapidFireChance', 'lifeSteal', 'damageReflection', 'knockbackChance', 'freeAttackChance', 'crystalDropChance', 'crystalWaveBonus']) {
     app.upgradeManager.levels.set(id, 2);
   }
   app.upgradeManager.applyAll(app.world, tower);
@@ -90,6 +90,8 @@ test('restart resets new combat stats, temporary rapid fire, lifesteal budget an
   app.world.getComponent(tower, imports.DefenseComponent).lifeStealBudget = 9;
   app.upgradeManager._lastFreeWave = 20;
   health.current = 1;
+  const economy = app.world.getComponent(tower, imports.EconomyComponent);
+  Object.assign(economy, { runCrystals: 15, lastCrystalRewardWave: 20, crystalsSettled: true });
   app.upgradeManager.reset();
   app._resetTowerStats();
   assert.equal(health.max, 300);
@@ -102,6 +104,33 @@ test('restart resets new combat stats, temporary rapid fire, lifesteal budget an
   assert.equal(app.world.getComponent(tower, imports.DefenseComponent).lifeSteal, 0);
   assert.equal(app.world.getComponent(tower, imports.DefenseComponent).lifeStealBudget, 0);
   assert.equal(app.upgradeManager._lastFreeWave, 0);
+  assert.equal(economy.runCrystals, 0); assert.equal(economy.lastCrystalRewardWave, 0);
+  assert.equal(economy.crystalsSettled, false); assert.equal(economy.crystalDropChance, .01);
+  assert.equal(economy.crystalWaveMultiplier, 1);
+});
+
+test('game restart and return restore permanent health and levels; start applies newly purchased levels', () => {
+  const { app } = appSetup();
+  app.playerProgress = { upgrades: { damage: 2, maxHealth: 1 }, isStageUnlocked: id => id === 1 };
+  app.upgradeManager = new imports.UpgradeManager(app.playerProgress.upgrades);
+  const tower = app._createTowerEntity();
+  const attack = app.world.getComponent(tower, imports.AttackComponent);
+  const health = app.world.getComponent(tower, imports.HealthComponent);
+  app.waveSystem = { reset() {}, startFirstWave() {} };
+  app.particleSystem = { reset() {} };
+  app.audioSystem = { restartBGM() {}, pauseBGM() {}, unlockAudio() {} };
+  app.uiManager = { reset() {}, hideMainMenu() {}, showMainMenu() {}, updateHUD() {}, renderUpgrades() {}, setGameSpeed() {} };
+  app.upgradeManager.levels.set('damage', 5); health.current = 1;
+  app.restartGame();
+  assert.equal(attack.damage, 37); assert.equal(app.upgradeManager.getLevel('damage'), 2);
+  assert.equal(health.current, 380); assert.equal(health.max, 380);
+  app.upgradeManager.levels.set('damage', 7);
+  app.returnToMenu();
+  assert.equal(attack.damage, 37); assert.equal(app.world.inMenu, true);
+  app.playerProgress.upgrades.damage = 3;
+  app.startGame();
+  assert.equal(attack.damage, 43); assert.equal(app.upgradeManager.getLevel('damage'), 3);
+  assert.equal(app.world.getComponent(tower, imports.EconomyComponent).credits, 0);
 });
 
 test('backgrounding pauses active gameplay once and never automatically unpauses', () => {
@@ -116,6 +145,48 @@ test('backgrounding pauses active gameplay once and never automatically unpauses
   document.hidden = false;
   app._handleVisibilityChange();
   assert.equal(app.world.isPaused, true);
+});
+
+test('campaign start refuses locked stages and replay restarts the same stage even after the next stage is selected', () => {
+  const { app } = appSetup();
+  app.playerProgress = { upgrades: {}, isStageUnlocked: id => id >= 1 && id <= 3 };
+  app.upgradeManager = new imports.UpgradeManager(); app._createTowerEntity();
+  const started = [];
+  app.waveSystem = { reset() {}, startFirstWave(world, id) { world.stageId = id; world.runOutcome = null; started.push(id); } };
+  app.particleSystem = { reset() {} };
+  app.audioSystem = { restartBGM() {}, pauseBGM() {}, unlockAudio() {} };
+  app.uiManager = { selectedStage: 3, reset() {}, hideMainMenu() {}, showMainMenu() {}, updateHUD() {}, renderUpgrades() {}, setGameSpeed() {} };
+  app.startGame(); assert.deepEqual(started, [3]);
+  app.world.runOutcome = 'victory'; app.world.isGameOver = true; app.uiManager.selectedStage = 4;
+  app.restartGame(); assert.deepEqual(started, [3, 3]); assert.equal(app.world.runOutcome, null);
+  app.returnToMenu(); assert.equal(app.world.stageId, null);
+  app.startGame(); assert.deepEqual(started, [3, 3]); assert.equal(app.world.inMenu, true);
+});
+
+test('ad resume cannot unpause a finished stage or a defeat', () => {
+  const { app } = appSetup();
+  app.audioSystem = { resumeAfterAd() {} };
+  app.uiManager = { _updatePauseButton() {} };
+  for (const outcome of ['victory', null]) {
+    app.world.isGameOver = true; app.world.isPaused = true; app.world.runOutcome = outcome;
+    app.resumeAfterAd(); assert.equal(app.world.isPaused, true);
+  }
+});
+
+test('closing or reloading warns only about unpaid crystals in an unfinished run', () => {
+  const { app } = appSetup();
+  const id = app.world.createEntity(), economy = new imports.EconomyComponent();
+  app.world.addComponent(id, new TowerComponent()); app.world.addComponent(id, economy);
+  let warnings = 0;
+  const event = { preventDefault() { warnings++; } };
+  app._handleBeforeUnload(event); assert.equal(warnings, 0);
+  economy.runCrystals = 9; app._handleBeforeUnload(event); assert.equal(warnings, 1);
+  assert.equal(event.returnValue, '');
+  economy.crystalsSettled = true; app._handleBeforeUnload(event); assert.equal(warnings, 1);
+  economy.crystalsSettled = false; app.world.isGameOver = true; app._handleBeforeUnload(event);
+  assert.equal(warnings, 1);
+  app.world.isGameOver = false; app.gameState = 'MENU'; app._handleBeforeUnload(event);
+  assert.equal(warnings, 1);
 });
 
 test('native mobile selects do not trigger gameplay keyboard shortcuts', () => {

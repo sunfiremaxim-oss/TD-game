@@ -1,0 +1,49 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Аудит боевой отрисовки</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050711;color:#adcbd8;font:13px system-ui}header{padding:10px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}button,select{background:#142536;color:#b9e8ec;border:1px solid #34576b;padding:7px}canvas{display:block;width:100%;height:calc(100dvh - 150px)}#results{display:block;white-space:pre-wrap;padding:8px;font:12px monospace;max-height:100px;overflow:auto}
+</style>
+<header><strong>Изолированный рендер: пустое поле и все корпуса</strong><select id="scene"></select><select id="mode"><option value="live">Прямой</option><option value="cached">Кэш</option></select><button id="run">Прогнать все сцены</button><span id="status">Готово</span></header>
+<canvas id="preview"></canvas><output id="results"></output>
+<script type="module">
+import { World } from '../../src/core/World.js';
+import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.54';
+import { GameConfig } from '../../src/config/GameConfig.js';
+import { TowerComponent } from '../../src/components/TowerComponent.js';
+import { TransformComponent } from '../../src/components/TransformComponent.js';
+import { RenderComponent } from '../../src/components/RenderComponent.js';
+import { HealthComponent } from '../../src/components/HealthComponent.js';
+import { AttackComponent } from '../../src/components/AttackComponent.js';
+import { EnemyComponent } from '../../src/components/EnemyComponent.js';
+const canvas=document.querySelector('#preview'),select=document.querySelector('#scene'),mode=document.querySelector('#mode'),output=document.querySelector('#results'),status=document.querySelector('#status'),button=document.querySelector('#run');
+const scenes=['tower130','tower290',...Object.keys(GameConfig.enemies)];
+select.innerHTML=scenes.map(name=>`<option value="${name}">${name.startsWith('tower')?'Пустое поле, дальность '+name.slice(5):'60 корпусов: '+name}</option>`).join('');
+const renderer=new RenderSystem(canvas,null);
+const caches={range:renderer.rangeFieldVisual,tower:renderer.towerVisual,enemies:renderer.enemyVisualCache};
+let world,job=null,previous=null;
+const rows=[];
+function setup(){
+ const width=canvas.clientWidth,height=canvas.clientHeight,ratio=Math.min(devicePixelRatio||1,1.5);
+ canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio);canvas.pixelRatio=ratio;
+ world=new World();world.width=width;world.height=height;
+ const add=(...components)=>{const id=world.createEntity();for(const c of components)world.addComponent(id,c)};
+ if(select.value.startsWith('tower'))add(new TowerComponent(),new TransformComponent(width/2,height/2),new RenderComponent('tower',8,26,'#00f3ff','#00f3ff',14),new HealthComponent(200,300),new AttackComponent(25,1.6,Number(select.value.slice(5))));
+ else {const cfg=GameConfig.enemies[select.value];for(let i=0;i<60;i++)add(new EnemyComponent(select.value),new TransformComponent(60+(i%12)*(width-120)/11,60+Math.floor(i/12)*(height-120)/4,i*.4),new RenderComponent('polygon',cfg.sides,cfg.radius,cfg.color,cfg.glowColor,cfg.glowBlur),new HealthComponent(cfg.baseHp,cfg.baseHp));}
+}
+select.onchange=setup;window.addEventListener('resize',setup);setup();
+button.onclick=()=>{rows.length=0;output.textContent='';select.value=scenes[0];mode.value='live';setup();job={index:0,warmup:12,samples:[],cpu:[]};button.disabled=true};
+function frame(time){
+ renderer.spaceTime=time/1000;renderer.corePulseAngle=time/1000*2.5;renderer.radarRotation=time/1000*.6;
+ renderer.rangeFieldVisual=mode.value==='cached'?caches.range:null;renderer.towerVisual=mode.value==='cached'?caches.tower:null;renderer.enemyVisualCache=mode.value==='cached'?caches.enemies:null;
+ const ctx=renderer.ctx;ctx.setTransform(canvas.pixelRatio,0,0,canvas.pixelRatio,0,0);ctx.fillStyle='#050711';ctx.fillRect(0,0,world.width,world.height);
+ const start=performance.now();
+ if(select.value.startsWith('tower')){renderer._drawTacticalGrids(ctx,world);renderer._drawTowerAndRange(ctx,world)}else renderer._drawEnemies(ctx,world);
+ const cpu=performance.now()-start;
+ if(job){status.textContent=select.value+' / '+mode.value;if(job.warmup>0)job.warmup--;else if(previous!==null){job.samples.push(time-previous);job.cpu.push(cpu)}
+ if(job.samples.length===80){const avg=a=>a.reduce((s,v)=>s+v,0)/a.length;rows.push({scene:select.value,mode:mode.value,fps:+(1000/avg(job.samples)).toFixed(1),cpuMs:+avg(job.cpu).toFixed(3)});output.textContent=JSON.stringify(rows);
+ if(mode.value==='live'&&caches.range){mode.value='cached';job.warmup=12;job.samples=[];job.cpu=[]}
+ else if(++job.index<scenes.length){select.value=scenes[job.index];mode.value='live';setup();job.warmup=12;job.samples=[];job.cpu=[]}
+ else{job=null;button.disabled=false;status.textContent='Завершено'}}}
+ previous=time;requestAnimationFrame(frame);
+}requestAnimationFrame(frame);
+</script></html>

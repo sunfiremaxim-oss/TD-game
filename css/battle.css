@@ -2,6 +2,8 @@
 .battle-layout {
   --deck-accent: #53dbe6;
   --deck-edge: rgba(83, 219, 230, 0.3);
+  --credits-color: #f0db96;
+  --credits-color-muted: #a99a70;
 }
 .battle-layout #game-viewport {
   display: grid;
@@ -13,19 +15,28 @@
 .battle-layout #canvas-wrapper { flex: 1 1 0; min-height: 0; min-width: 0; width: 100%; }
 .battle-layout #top-hud {
   position: absolute; inset: 16px 16px auto;
-  display: flex; justify-content: space-between; align-items: flex-start;
-  height: auto; min-height: 0; padding: 0; gap: 12px;
+  display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-end;
+  height: auto; min-height: 0; padding: 0; gap: 8px;
   background: none; border: 0; box-shadow: none; pointer-events: none;
 }
-.battle-layout .credit-wallet { display: flex; flex-direction: column; gap: 2px; text-align: left; }
-.battle-layout .wallet-label { font: 700 9px var(--font-cyber); letter-spacing: 2px; color: #8298ad; }
+.battle-layout #arena-menu-slot:empty { display: none; }
+.battle-layout .credit-wallet { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: right; }
 .battle-layout #hud-credits {
   background: none; border: 0; padding: 0; border-radius: 0;
-  color: #f0db96; font: 800 25px var(--font-ui); line-height: 1.1;
+  color: var(--credits-color); font: 800 25px var(--font-ui); line-height: 1.1;
   box-shadow: none; text-shadow: 0 1px 8px #05080f;
-  transform: none; justify-content: flex-start;
+  transform: none; justify-content: flex-end;
 }
 .battle-layout #hud-credits.pulse { color: #fff1c7; transform: none; }
+.chip-icon {
+  display: inline-block; width: 20px; height: 20px; flex: none; color: #9cd5ff; background: currentColor;
+  /* One vector for the permanent wallet, pending rewards and defeat screen. */
+  --chip-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='5' y='5' width='14' height='14' rx='2'/%3E%3Crect x='9' y='9' width='6' height='6' rx='1'/%3E%3Cpath d='M8 2v3m4-3v3m4-3v3M8 19v3m4-3v3m4-3v3M2 8h3m-3 4h3m-3 4h3M19 8h3m-3 4h3m-3 4h3'/%3E%3C/svg%3E");
+  -webkit-mask: var(--chip-mask) center / contain no-repeat; mask: var(--chip-mask) center / contain no-repeat;
+}
+.chip-amount { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.battle-layout .run-crystal-wallet { display: flex; align-items: center; gap: 6px; color: #9cd5ff; }
+.battle-layout #hud-run-crystals { font: 400 17px var(--font-ui); font-variant-numeric: tabular-nums; }
 .battle-layout .arena-menu-buttons { display: flex; gap: 8px; pointer-events: auto; }
 .battle-layout .arena-icon-btn {
   width: 44px; height: 44px; border: 1px solid #283b4d; border-radius: 10px;
@@ -40,6 +51,13 @@
   text-align: left;
 }
 .battle-layout .battle-menu > * { flex-shrink: 0; }
+.battle-layout .battle-menu-main, .battle-layout .abandon-run-confirm { display: flex; flex-direction: column; gap: inherit; width: 100%; }
+.battle-layout .battle-menu-main[hidden], .battle-layout .abandon-run-confirm[hidden] { display: none; }
+.battle-layout .abandon-run-confirm h2 { margin: 0; font: 400 28px/1.1 var(--font-ui); color: #f0cc8b; }
+.battle-layout .abandon-run-confirm p { color: #b1c5d5; font: 400 17px/1.4 var(--font-ui); }
+.battle-layout #btn-abandon-accept { color: #f1c09a; border-color: #9a6447; }
+.gameover-crystal-reward { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 20px; color: #9cd5ff; font: 400 16px var(--font-ui); }
+.gameover-crystal-reward strong { font-size: 32px; }
 .battle-layout .battle-menu-heading { width: 100%; }
 .battle-layout .battle-menu-eyebrow { color: #7892a8; font: 700 9px var(--font-ui); letter-spacing: 1.6px; }
 .battle-layout #battle-menu-title { margin: 3px 0 0; color: #d4eaf0; font: 800 26px var(--font-ui); letter-spacing: 3px; }
@@ -49,6 +67,10 @@
 }
 .battle-layout .battle-menu .cyan-btn { background: #19444b; border-color: #479b9e; color: #b1f3ee; }
 .battle-layout .battle-menu-settings { width: 100%; padding: 16px 0; border-top: 1px solid #24394c; border-bottom: 1px solid #24394c; }
+.language-toggle { min-width: 112px; min-height: 42px; padding: 8px 18px; border: 1px solid #456578; border-radius: 6px; color: #b9e7ef; background: #142a3a; font: 400 18px var(--font-ui); cursor: pointer; }
+.language-toggle:hover { background: #234052; border-color: #70d9df; }
+.battle-language-setting { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; font: 400 17px var(--font-ui); color: #adc6d5; }
+.battle-layout .battle-menu .language-toggle { width: auto; min-height: 38px; }
 .battle-layout .battle-menu-settings h3 { margin: 0 0 10px; color: #7892a8; font: 700 10px var(--font-ui); letter-spacing: 1.5px; }
 .battle-layout .battle-menu-audio { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .battle-layout .battle-menu .audio-btn, .battle-layout .battle-menu #btn-fps {
@@ -70,7 +92,7 @@
 .battle-layout #fps-counter { font-size: 10px; color: #829db0; padding: 4px 6px; background: #07101bb3; }
 .battle-layout .battle-controls {
   position: absolute; bottom: 12px; left: 16px; right: 16px;
-  display: flex; align-items: flex-end; justify-content: flex-end; gap: 12px; z-index: 10; pointer-events: none;
+  display: flex; align-items: center; justify-content: flex-end; gap: 12px; z-index: 10; pointer-events: none;
 }
 .battle-layout .speed-controls {
   flex: none; display: flex; flex-direction: column; align-items: stretch; gap: 0; padding: 0; pointer-events: auto;
@@ -127,9 +149,9 @@
 }
 .battle-layout .wave-bar-bg { height: 5px; margin-top: 0; background: #050b13; border: 0; border-radius: 2px; overflow: hidden; box-shadow: none; }
 .battle-layout #hud-wave-fill { height: 100%; width: 0; background: #4e9fc0; transition: width 0.15s linear; }
-.battle-layout .wave-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 0 0 4px; line-height: 16px; }
-.battle-layout #hud-wave { font: 800 14px var(--font-ui); letter-spacing: 0.5px; color: #d6e5ee; }
-.battle-layout #hud-enemies { color: #8299ad; font: 600 10px var(--font-ui); white-space: nowrap; }
+.battle-layout .wave-heading { display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start; gap: 4px; margin: 0 0 4px; font: 800 14px/16px var(--font-ui); letter-spacing: .5px; white-space: nowrap; }
+.battle-layout #hud-wave { font: inherit; color: #d6e5ee; white-space: nowrap; }
+.battle-layout #hud-enemies { color: #8299ad; font: inherit; white-space: nowrap; }
 .battle-layout #intermission-container { display: block; position: static; width: auto; height: 11px; margin: 3px 0 0; }
 .battle-layout #intermission-container.hidden { display: block; visibility: hidden; opacity: 0; }
 .battle-layout #intermission-text { display: block; font: 700 9px/11px var(--font-ui); letter-spacing: 0; color: #c9b57e; margin: 0; animation: none; text-shadow: none; white-space: nowrap; }
@@ -159,17 +181,17 @@
 .battle-layout .upgrade-card.wide { grid-column: 1 / -1; }
 .battle-layout .upgrade-card.wrap-title .upgrade-title { white-space: normal; overflow: visible; text-overflow: clip; }
 .battle-layout .upgrade-header { grid-column: 1 / -1; grid-row: 1; display: flex; justify-content: space-between; align-items: center; gap: 5px; min-width: 0; }
-.battle-layout .upgrade-title { font: 700 12px/14px var(--font-ui); letter-spacing: 0; color: #bdd0de; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.battle-layout .upgrade-lvl { flex: none; padding: 1px 3px; border: 0; border-radius: 3px; color: #738da4; background: #081421; text-shadow: none; font: 600 8px var(--font-ui); white-space: nowrap; }
+.battle-layout .upgrade-title { font: 400 14px/16px var(--font-ui); letter-spacing: 0; color: #bdd0de; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.battle-layout .upgrade-lvl { flex: none; padding: 1px 3px; border: 0; border-radius: 3px; color: #738da4; background: #081421; text-shadow: none; font: 400 9px var(--font-ui); white-space: nowrap; }
 .battle-layout .upgrade-stats { grid-column: 1; grid-row: 2; display: flex; flex-wrap: nowrap; align-items: baseline; gap: 3px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.battle-layout .stat-current { flex: none; color: #e8f1f5; font: 700 14px var(--font-ui); }
+.battle-layout .stat-current { flex: none; color: #e8f1f5; font: 400 16px var(--font-ui); }
 .battle-layout .stat-arrow { color: #507186; font-size: 8px; }
-.battle-layout .stat-next { color: #779bab; font: 600 9px var(--font-ui); text-shadow: none; }
+.battle-layout .stat-next { color: #779bab; font: 400 11px var(--font-ui); text-shadow: none; }
 .battle-layout .upgrade-footer { grid-column: 2; grid-row: 2; display: block; border: 0; padding: 0; }
-.battle-layout .upgrade-price { color: var(--deck-accent); font: 800 13px var(--font-ui); white-space: nowrap; }
+.battle-layout .upgrade-price { color: var(--credits-color); font: 400 15px var(--font-ui); white-space: nowrap; }
 .battle-layout .upgrade-hint { display: none; }
 .battle-layout .upgrade-card.upgrade-buy-btn.disabled { opacity: 1; border-color: #223044; background: #101c2b; color: #7892a5; }
-.battle-layout .upgrade-card.disabled .upgrade-price { color: #617b90; }
+.battle-layout .upgrade-card.disabled .upgrade-price { color: var(--credits-color-muted); }
 .battle-layout .upgrade-card.locked .upgrade-price { color: #aa936b; font-size: 11px; }
 .battle-layout .upgrade-card.locked .stat-next, .battle-layout .upgrade-card.locked .stat-arrow { display: none; }
 .battle-layout .upgrade-card.maxed .upgrade-price { color: #68bdaa; }
@@ -199,22 +221,22 @@
     padding: calc(10 * var(--desktop-unit)) calc(12 * var(--desktop-unit));
     border-radius: calc(7 * var(--desktop-unit));
   }
-  .battle-layout .upgrade-title { font-size: calc(16 * var(--desktop-unit)); line-height: 1.2; color: #d5e4ee; }
+  .battle-layout .upgrade-title { font-size: calc(18 * var(--desktop-unit)); line-height: 1.2; color: #d5e4ee; }
   .battle-layout .upgrade-lvl { font-size: calc(11 * var(--desktop-unit)); padding: calc(2 * var(--desktop-unit)) calc(4 * var(--desktop-unit)); color: #9aafc1; }
   .battle-layout .upgrade-stats { gap: calc(4 * var(--desktop-unit)); }
-  .battle-layout .stat-current { font-size: calc(20 * var(--desktop-unit)); line-height: 1.2; }
+  .battle-layout .stat-current { font-size: calc(22 * var(--desktop-unit)); line-height: 1.2; }
   .battle-layout .stat-arrow { font-size: calc(12 * var(--desktop-unit)); }
-  .battle-layout .stat-next { font-size: calc(14 * var(--desktop-unit)); color: #9dbbc9; }
-  .battle-layout .upgrade-price { font-size: calc(18 * var(--desktop-unit)); }
+  .battle-layout .stat-next { font-size: calc(15 * var(--desktop-unit)); color: #9dbbc9; }
+  .battle-layout .upgrade-price { font-size: calc(20 * var(--desktop-unit)); }
   .battle-layout .upgrade-card.locked .upgrade-price { font-size: calc(12 * var(--desktop-unit)); }
-  .battle-layout .upgrade-card.disabled .upgrade-price { color: #8ba2b6; }
   .battle-layout .tabs-container { min-height: calc(54 * var(--desktop-unit)); }
   .battle-layout .tab-btn { min-height: calc(52 * var(--desktop-unit)); font-size: calc(16 * var(--desktop-unit)); color: #96adbf; }
   .battle-layout .tab-btn.active { color: var(--deck-accent); }
 
   .battle-layout #top-hud { inset: calc(20 * var(--desktop-unit)) calc(20 * var(--desktop-unit)) auto; }
-  .battle-layout .wallet-label { font-size: calc(12 * var(--desktop-unit)); }
   .battle-layout #hud-credits { font-size: calc(36 * var(--desktop-unit)); }
+  .battle-layout #hud-run-crystals { font-size: calc(22 * var(--desktop-unit)); }
+  .battle-layout .run-crystal-wallet .chip-icon { width: calc(22 * var(--desktop-unit)); height: calc(22 * var(--desktop-unit)); }
   .battle-layout .arena-icon-btn { width: calc(48 * var(--desktop-unit)); height: calc(48 * var(--desktop-unit)); font-size: calc(26 * var(--desktop-unit)); }
   .battle-layout #performance-overlay { top: calc(84 * var(--desktop-unit)); left: calc(20 * var(--desktop-unit)); }
   .battle-layout #fps-counter { font-size: calc(14 * var(--desktop-unit)); }
@@ -224,15 +246,15 @@
   .battle-layout .hp-regen { font-size: calc(14 * var(--desktop-unit)); }
   .battle-layout .hp-bar-bg { height: calc(14 * var(--desktop-unit)); margin-top: calc(8 * var(--desktop-unit)); }
   .battle-layout .wave-heading { margin: 0 0 calc(8 * var(--desktop-unit)); }
-  .battle-layout #hud-wave { font-size: calc(20 * var(--desktop-unit)); line-height: 1.2; }
-  .battle-layout #hud-enemies { font-size: calc(14 * var(--desktop-unit)); }
+  .battle-layout .wave-heading { font-size: calc(20 * var(--desktop-unit)); line-height: 1.2; }
   .battle-layout .wave-bar-bg { height: calc(8 * var(--desktop-unit)); margin-top: 0; }
   .battle-layout #intermission-container { height: calc(16 * var(--desktop-unit)); margin-top: calc(4 * var(--desktop-unit)); }
   .battle-layout #intermission-text { font-size: calc(12 * var(--desktop-unit)); line-height: calc(16 * var(--desktop-unit)); }
 
   .battle-layout .battle-controls { bottom: calc(16 * var(--desktop-unit)); left: calc(20 * var(--desktop-unit)); right: calc(20 * var(--desktop-unit)); }
-  .battle-layout #game-speed-value { font-size: calc(18 * var(--desktop-unit)); line-height: 1.2; padding: calc(4 * var(--desktop-unit)); }
-  .battle-layout .speed-buttons > button, .battle-layout #btn-pause { flex: 0 0 calc(44 * var(--desktop-unit)); width: calc(44 * var(--desktop-unit)); min-width: calc(44 * var(--desktop-unit)); height: calc(44 * var(--desktop-unit)); min-height: calc(44 * var(--desktop-unit)); }
+  .battle-layout .speed-controls { height: calc(48 * var(--desktop-unit)); }
+  .battle-layout #game-speed-value { height: calc(16 * var(--desktop-unit)); font-size: calc(14 * var(--desktop-unit)); line-height: calc(15 * var(--desktop-unit)); padding: 0 calc(6 * var(--desktop-unit)); }
+  .battle-layout .speed-buttons > button, .battle-layout #btn-pause { flex: 0 0 calc(44 * var(--desktop-unit)); width: calc(44 * var(--desktop-unit)); min-width: calc(44 * var(--desktop-unit)); height: calc(30 * var(--desktop-unit)); min-height: calc(30 * var(--desktop-unit)); }
   .battle-layout .speed-step-btn { font-size: calc(26 * var(--desktop-unit)); }
   .battle-layout #btn-pause { font-size: calc(18 * var(--desktop-unit)); }
 
@@ -267,12 +289,11 @@
   }
   .battle-layout #btn-pause { font-size: 13px; }
   .battle-layout .tabs-container { min-height: 44px; }
-  .battle-layout .tab-btn { min-height: 44px; padding: 4px 2px; font-size: 10px; }
+  .battle-layout .tab-btn { min-height: 44px; padding: 4px 2px; font-size: 12px; }
   .battle-layout #upgrades-list { padding: 8px; }
   .battle-layout #combat-status { flex-basis: 56px; }
   .battle-layout .core-status, .battle-layout .wave-status { padding: 8px 10px; }
-  .battle-layout #hud-wave { font-size: 13px; }
-  .battle-layout #hud-enemies { font-size: 9px; }
+  .battle-layout .wave-heading { font-size: 13px; }
   .battle-layout #hud-hp-text { font-size: 11px; }
 }
 @media (max-width: 1100px) and (orientation: portrait), (max-width: 600px) {
@@ -288,15 +309,16 @@
 @media (max-width: 360px) {
   .battle-layout .modal-content.battle-menu { padding: 18px !important; gap: 14px !important; }
   .battle-layout .battle-menu-actions { grid-template-columns: minmax(0, 1fr); }
-  .battle-layout .upgrade-title { font-size: 12px; }
-  .battle-layout .upgrade-lvl { font-size: 8px; }
+  .battle-layout .upgrade-title { font-size: 14px; }
+  .battle-layout .upgrade-lvl { font-size: 9px; }
   .battle-layout .stat-next, .battle-layout .stat-arrow { display: none; }
-  .battle-layout #hud-wave { font-size: 12px; }
-  .battle-layout #hud-enemies { font-size: 8px; }
+  .battle-layout .wave-heading { font-size: 12px; }
   .battle-layout #hud-hp-text { font-size: 10px; }
 }
 @media (max-height: 500px) and (min-width: 601px) {
   .battle-layout #game-viewport { grid-template-columns: minmax(0, 1fr) 320px; }
+  .battle-layout .stat-current { font-size: 15px; }
+  .battle-layout .stat-next { font-size: 9px; }
   .battle-layout #combat-status { flex-basis: 56px; }
   .battle-layout #top-hud { inset: 8px 10px auto; }
   .battle-layout #performance-overlay { top: 60px; left: 10px; }
@@ -304,13 +326,77 @@
 }
 @media (max-height: 500px) and (min-width: 401px) and (max-width: 600px) {
   .battle-layout #game-viewport { grid-template-columns: minmax(0, 1fr) min(48vw, 260px); grid-template-rows: minmax(0, 1fr); }
+  .battle-layout .stat-next, .battle-layout .stat-arrow { display: none; }
   .battle-layout #sidebar { border-left: 1px solid #294359; border-top: 0; }
   .battle-layout .tabs-container { order: -1; border-top: 0; border-bottom: 1px solid #263c51; }
   .battle-layout #combat-status { flex-basis: 56px; }
   .battle-layout #top-hud { inset: 8px; }
   .battle-layout .battle-controls { left: 8px; right: 8px; gap: 4px; }
   .battle-layout .core-status, .battle-layout .wave-status { padding: 8px 6px; }
-  .battle-layout #hud-wave { font-size: 10px; }
-  .battle-layout #hud-enemies { font-size: 8px; }
+  .battle-layout .wave-heading { font-size: 10px; }
   .battle-layout #hud-hp-text { font-size: 9px; }
+}
+
+/* Purchase confirmation stays visible even if the new price disables the card. */
+.battle-layout .upgrade-card.upgrade-buy-btn { position: relative; }
+.battle-layout .upgrade-confirm {
+  position: absolute; top: calc(4 * var(--desktop-unit, 1px)); right: calc(7 * var(--desktop-unit, 1px));
+  width: calc(20 * var(--desktop-unit, 1px)); height: calc(17 * var(--desktop-unit, 1px));
+  display: grid; place-items: center; pointer-events: none; opacity: 0;
+  border: 1px solid #6ce9b3; border-radius: 4px; background: #143d32; color: #b0ffdb;
+  font: 800 calc(13 * var(--desktop-unit, 1px))/1 var(--font-ui);
+}
+.battle-layout .upgrade-card.purchase-feedback { animation: upgrade-purchased 0.7s ease-out; }
+.battle-layout .purchase-feedback .upgrade-lvl { visibility: hidden; }
+.battle-layout .purchase-feedback .upgrade-confirm { animation: upgrade-confirm 0.7s ease-out; }
+@keyframes upgrade-purchased {
+  0%, 25% { background-color: #205043; border-color: #79ecc1; box-shadow: inset 0 0 0 1px #79ecc155; }
+  100% { box-shadow: inset 0 0 0 1px transparent; }
+}
+@keyframes upgrade-confirm {
+  0% { opacity: 0; transform: scale(0.85); }
+  12%, 75% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .battle-layout .purchase-feedback .upgrade-confirm { animation-name: upgrade-confirm-still; }
+}
+@keyframes upgrade-confirm-still { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
+.battle-layout #mobile-speed-slot { display: none; }
+.battle-layout .wave-details { min-width: 0; }
+/* Reuse the same controls in the wave panel on phones, tablets and short viewports. */
+@media (max-width: 1100px), (max-height: 600px) {
+  .battle-layout #combat-status { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  .battle-layout #hud-hp-text { gap: 3px; font-size: 15px; line-height: 18px; }
+  .battle-layout .hp-regen { font-size: 10px; }
+  .battle-layout .wave-status {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center;
+    gap: 6px; padding: 5px 8px;
+  }
+  .battle-layout .wave-heading { flex-direction: row; align-items: center; gap: 4px; margin: 0; }
+  .battle-layout .wave-heading { font-size: 12px; line-height: 13px; }
+  .battle-layout .wave-bar-bg { height: 3px; margin-top: 3px; }
+  .battle-layout #intermission-container { height: auto; margin-top: 2px; }
+  .battle-layout #intermission-container.hidden { display: none; }
+  .battle-layout #intermission-text { font-size: 8px; line-height: 9px; white-space: normal; }
+  /* Center the button row optically; the 12px multiplier above it adds top weight. */
+  .battle-layout #mobile-speed-slot { display: block; transform: translateY(-6px); }
+  .battle-layout #mobile-speed-slot .speed-controls { border: 0; background: #09121e; border-radius: 4px; overflow: hidden; }
+  .battle-layout #mobile-speed-slot #game-speed-value { padding: 0; font-size: 10px; line-height: 12px; border: 0; }
+  .battle-layout #mobile-speed-slot .speed-step-btn, .battle-layout #mobile-speed-slot #btn-pause {
+    width: 28px; min-width: 28px; height: 28px; min-height: 28px; font-size: 18px;
+  }
+  .battle-layout #mobile-speed-slot #btn-pause { font-size: 12px; }
+}
+@media (max-width: 360px) {
+  .battle-layout #hud-hp-text { font-size: 14px; }
+  .battle-layout .core-status { padding-inline: 8px; }
+  .battle-layout .hp-regen { font-size: 9px; }
+}
+@media (max-height: 500px) and (min-width: 401px) and (max-width: 600px) {
+  .battle-layout #combat-status { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
+  .battle-layout #hud-hp-text { font-size: 14px; }
+  .battle-layout .hp-regen { position: absolute; bottom: 3px; right: 6px; font-size: 9px; line-height: 10px; }
+  .battle-layout .hp-bar-bg { height: 5px; margin-top: 3px; }
+  .battle-layout .wave-heading { font-size: 10px; line-height: 11px; }
 }

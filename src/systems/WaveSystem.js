@@ -11,12 +11,20 @@ import { HealthComponent } from '../components/HealthComponent.js';
 import { ArmorComponent } from '../components/ArmorComponent.js';
 import { RenderComponent } from '../components/RenderComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
+import { FighterFlightComponent } from '../components/FighterFlightComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { AttackComponent } from '../components/AttackComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { DevControlComponent } from '../components/DevControlComponent.js';
+import { getStage } from '../config/StageConfig.js';
+import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
+import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
+import { CarrierComponent } from '../components/CarrierComponent.js';
+import { RailgunComponent } from '../components/RailgunComponent.js';
 
 export class WaveSystem {
   constructor() {
+    this.stageId = null; // null retains the endless sandbox used by diagnostics/devtools.
     this.currentWave = 1;
     this.state = 'IDLE'; // Idle until game starts
     this.intermissionTimer = 0;
@@ -30,18 +38,25 @@ export class WaveSystem {
   }
 
   init(world) {
+    world.eventBus.on('CARRIER_LAUNCH', ({ carrierId }) => this._spawnCarrierWing(world, carrierId));
     world.eventBus.on('SPLITTER_SPLIT', (event) => {
       this._spawnSplitterShards(world, event.x, event.y);
     });
   }
 
-  startFirstWave(world) {
+  startFirstWave(world, stageId = null) {
+    if (stageId !== null && !getStage(stageId)) return false;
+    this.stageId = stageId;
+    world.stageId = stageId;
+    world.runOutcome = null;
     this.currentWave = 1;
     this.state = 'ACTIVE';
     this._startWave(world);
+    return true;
   }
 
   reset() {
+    this.stageId = null;
     this.currentWave = 1;
     this.state = 'IDLE';
     this.intermissionTimer = 0;
@@ -54,6 +69,9 @@ export class WaveSystem {
 
   update(world, deltaTime) {
     if (this.state === 'IDLE' || world.isGameOver) return;
+    const devId = world.getEntitiesWith(DevControlComponent)[0];
+    const dev = devId === undefined ? null : world.getComponent(devId, DevControlComponent);
+    if (GameConfig.devTools.enabled && dev?.enabled && dev.wavesFrozen) return;
 
     if (this.state === 'INTERMISSION') {
       this.intermissionTimer -= deltaTime;
@@ -108,14 +126,28 @@ export class WaveSystem {
 
     world.eventBus.emit('WAVE_STARTED', {
       wave: this.currentWave,
+      stage: this.stageId,
+      finalWave: getStage(this.stageId)?.waves,
+      isBoss: this._isBossWave(this.currentWave),
       totalEnemies: this.totalEnemiesInWave
     });
   }
 
   _completeWave(world) {
+    if (this.state !== 'ACTIVE' || world.isGameOver) return;
     world.eventBus.emit('WAVE_COMPLETED', {
       wave: this.currentWave
     });
+
+    const stage = getStage(this.stageId);
+    if (stage && this.currentWave === stage.waves) {
+      this.state = 'COMPLETE';
+      world.isGameOver = true;
+      world.isPaused = true;
+      world.runOutcome = 'victory';
+      world.eventBus.emit('STAGE_COMPLETED', { stage: stage.id, wave: this.currentWave });
+      return;
+    }
 
     this.currentWave++;
     this.state = 'INTERMISSION';
@@ -132,6 +164,7 @@ export class WaveSystem {
    * Generates enemy sequence matching onboarding curve and high-wave scaling
    */
   _generateWaveEnemies(wave) {
+    if (getStage(this.stageId)) return this._generateStageEnemies(wave);
     const list = [];
 
     // Boss Waves: Every 10th wave (10, 20, 30...) features the Architect Boss
@@ -235,7 +268,41 @@ export class WaveSystem {
     return Math.max(0.45, 0.80 - (wave - 6) * 0.03);
   }
 
-  _spawnEnemy(world, type) {
+  _isBossWave(wave) {
+    const stage = getStage(this.stageId);
+    return stage ? Boolean(stage.boss) && wave === stage.waves : wave % 10 === 0;
+  }
+
+  _generateStageEnemies(wave) {
+    const stage = getStage(this.stageId);
+    if (!Number.isInteger(wave) || wave < 1 || wave > stage.waves) return [];
+    if (this._isBossWave(wave)) return [stage.boss];
+    const roster = wave <= 10 ? stage.firstHalf : stage.secondHalf;
+    const count = 9 + (wave - 1) + Math.floor((stage.id - 1) * 0.75);
+    const weights = stage.id === 8 && wave > 10
+      ? { scout: 20, fighter: 30, tank: 24, sniper: 16, aegis: 4, splitter: 3, blinker: 3 }
+      : { scout: 35, fighter: 25, tank: 18, sniper: 12, aegis: 3, splitter: 4, blinker: 3 };
+    // Include each unlocked type, then distribute remaining slots proportionally.
+    const list = [...roster], allocated = roster.map(() => 0);
+    const totalWeight = roster.reduce((sum, type) => sum + weights[type], 0);
+    const remaining = count - list.length;
+    for (let i = 0; i < remaining; i++) {
+      let best = 0;
+      for (let j = 1; j < roster.length; j++) {
+        if (weights[roster[j]] / totalWeight * (i + 1) - allocated[j]
+          > weights[roster[best]] / totalWeight * (i + 1) - allocated[best]) best = j;
+      }
+      allocated[best]++;
+      list.push(roster[best]);
+    }
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+  }
+
+  _spawnEnemy(world, type, overrides = {}) {
     const archetype = GameConfig.enemies[type];
     if (!archetype) return;
 
@@ -246,9 +313,9 @@ export class WaveSystem {
     const centerY = h / 2;
 
     // Guaranteed off-screen perimeter spawn adapted to current canvas dimensions & aspect ratio:
-    // boss_architect has radius 38 + shieldOrbitRadius 78 + shield radius 12 = 128px bounding radius.
+    // Architect bounds include its solid hull and the baked glow, without satellites.
     // Standard enemies have radius up to 22 + glowBlur 14.
-    const baseMargin = (type === 'boss_architect') ? 125 : 55;
+    const baseMargin = type.startsWith('boss_') ? archetype.radius + 30 : 55;
     // Add small random depth jitter (0 to 25px) so units don't spawn in a rigid flat line
     const margin = baseMargin + Math.random() * 25;
 
@@ -288,14 +355,15 @@ export class WaveSystem {
     // HP = BaseHP * (1.10 ^ (Wave - 1))
     // Damage = BaseDmg * (1.07 ^ (Wave - 1))
     const wave = this.currentWave;
-    const hpMultiplier = Math.pow(GameConfig.waves.hpScaleFactor, wave - 1);
-    const scaledHp = Math.round(archetype.baseHp * hpMultiplier);
+    const stage = getStage(this.stageId);
+    const hpMultiplier = Math.pow(GameConfig.waves.hpScaleFactor, wave - 1) * (stage?.hpMultiplier || 1);
+    const scaledHp = Math.max(1, Math.round(archetype.baseHp * hpMultiplier * (overrides.hpMultiplier ?? 1)));
 
-    const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, wave - 1);
-    const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier));
+    const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, wave - 1) * (stage?.damageMultiplier || 1);
+    const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier * (overrides.damageMultiplier ?? 1)));
 
-    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, wave - 1));
-    const scaledReward = Math.max(1, Math.round(archetype.baseReward * rewardMultiplier));
+    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, wave - 1)) * (stage?.rewardMultiplier || 1);
+    const scaledReward = Math.max(1, Math.round(archetype.baseReward * rewardMultiplier * (overrides.rewardMultiplier ?? 1)));
 
     const isSniper = archetype.type === 'sniper';
 
@@ -317,18 +385,35 @@ export class WaveSystem {
       rotSpeed = (Math.random() < 0.5 ? -1 : 1) * (0.4 + Math.random() * 0.6); // 0.4 to 1.0 rad/s
     } else if (archetype.type === 'aegis') {
       rotSpeed = (Math.random() < 0.5 ? -1 : 1) * 0.5;
-    } else if (archetype.type === 'boss_architect') {
-      rotSpeed = (Math.random() < 0.5 ? -1 : 1) * 0.4;
+    } else if (archetype.type === 'boss_architect' || archetype.type === 'boss_scout') {
+      rotSpeed = (Math.random() < 0.5 ? -1 : 1) * archetype.rotationSpeed;
     }
 
     const angleToCenter = Math.atan2(centerY - spawnY, centerX - spawnX);
-    const initialRotation = (archetype.type === 'scout' || archetype.type === 'tank' || archetype.type === 'aegis' || archetype.type === 'boss_architect')
+    const initialRotation = (archetype.type === 'scout' || archetype.type === 'tank' || archetype.type === 'aegis' || archetype.type === 'boss_architect' || archetype.type === 'boss_scout')
       ? Math.random() * Math.PI * 2
       : angleToCenter;
 
-    world.addComponent(enemyId, new TransformComponent(spawnX, spawnY, initialRotation));
+    world.addComponent(enemyId, new TransformComponent(overrides.x ?? spawnX, overrides.y ?? spawnY, overrides.rotation ?? initialRotation));
     world.addComponent(enemyId, new VelocityComponent(0, 0, archetype.baseSpeed, finalSpeed));
     world.addComponent(enemyId, new CircleColliderComponent(archetype.radius, archetype.mass, false));
+    if (type === 'fighter') {
+      const flight = archetype.flight;
+      world.addComponent(enemyId, new FighterFlightComponent(overrides.direction ?? (Math.random() < 0.5 ? -1 : 1),
+        flight.spiralMin + Math.random() * (flight.spiralMax - flight.spiralMin)));
+    }
+    if (type === 'boss_architect') {
+      world.addComponent(enemyId, new ArchitectDrillComponent());
+      world.addComponent(enemyId, new ArchitectSiegeComponent());
+    }
+    if (type === 'boss_carrier') {
+      const carrier = new CarrierComponent(); carrier.orbitDirection = Math.random() < .5 ? -1 : 1;
+      world.addComponent(enemyId, carrier);
+    }
+    if (type === 'boss_railgun') {
+      const rail = new RailgunComponent(); rail.orbitDirection = Math.random() < .5 ? -1 : 1;
+      world.addComponent(enemyId,rail);
+    }
     world.addComponent(enemyId, new HealthComponent(scaledHp, scaledHp, 0));
     world.addComponent(enemyId, new ArmorComponent(0, 0));
     world.addComponent(enemyId, new RenderComponent(
@@ -353,55 +438,6 @@ export class WaveSystem {
       archetype.shieldDomeRadius || 0
     );
 
-    // If Boss Architect: spawn physical rotating shield segments
-    if (archetype.type === 'boss_architect') {
-      const shieldCount = wave >= 20 ? 8 : (archetype.shieldCount || 6);
-      const orbitR = archetype.shieldOrbitRadius || 78;
-      const orbitSpeed = archetype.shieldOrbitSpeed || 1.25;
-      const shieldArchetype = GameConfig.enemies.boss_shield;
-      const shieldHp = Math.round(shieldArchetype.baseHp * hpMultiplier);
-      const scaledShieldReward = Math.max(1, Math.round(shieldArchetype.baseReward * rewardMultiplier));
-
-      const shieldIds = [];
-      for (let i = 0; i < shieldCount; i++) {
-        const shieldAngle = (i / shieldCount) * Math.PI * 2;
-        const sx = spawnX + Math.cos(shieldAngle) * orbitR;
-        const sy = spawnY + Math.sin(shieldAngle) * orbitR;
-
-        const sId = world.createEntity();
-        world.addComponent(sId, new TransformComponent(sx, sy, shieldAngle + Math.PI / 2));
-        world.addComponent(sId, new VelocityComponent(0, 0, 0, 0));
-        world.addComponent(sId, new CircleColliderComponent(shieldArchetype.radius, shieldArchetype.mass, true)); // isStatic: true
-        world.addComponent(sId, new HealthComponent(shieldHp, shieldHp, 0));
-        world.addComponent(sId, new ArmorComponent(0, 0));
-        world.addComponent(sId, new RenderComponent(
-          'shield_segment',
-          shieldArchetype.sides,
-          shieldArchetype.radius,
-          shieldArchetype.color,
-          shieldArchetype.glowColor,
-          shieldArchetype.glowBlur
-        ));
-        world.addComponent(sId, new EnemyComponent(
-          'boss_shield',
-          scaledShieldReward,
-          false,
-          0,
-          0,
-          0,
-          0,
-          shieldArchetype.baseDamage
-        ));
-        shieldIds.push(sId);
-      }
-
-      enemyComp.shieldCount = shieldCount;
-      enemyComp.shieldIds = shieldIds;
-      enemyComp.shieldOrbitRadius = orbitR;
-      enemyComp.shieldOrbitSpeed = orbitSpeed;
-      enemyComp.shieldOrbitAngle = 0;
-    }
-
     world.addComponent(enemyId, enemyComp);
 
     world.eventBus.emit('ENEMY_SPAWNED', {
@@ -410,17 +446,42 @@ export class WaveSystem {
       hp: scaledHp,
       damage: scaledDamage
     });
+    return enemyId;
+  }
+
+  _spawnCarrierWing(world, id) {
+    const carrier = world.getComponent(id, CarrierComponent), health = world.getComponent(id, HealthComponent);
+    const position = world.getComponent(id, TransformComponent);
+    if (!carrier?.pendingLaunch || carrier.phase !== 'launch' || carrier.launches < 1 || carrier.launches > GameConfig.enemies.boss_carrier.maxLaunches ||
+        !health || health.current <= 0 || !position || world.isGameOver || world.inMenu || world.destructionQueue.has(id)) return;
+    carrier.pendingLaunch = false; // Consume once, including re-entrant/replayed events.
+    const tower = world.getEntitiesWith(TowerComponent, TransformComponent)[0];
+    if (tower === undefined) return;
+    const target = world.getComponent(tower, TransformComponent), cfg = GameConfig.enemies.boss_carrier;
+    const angle = Math.atan2(target.y - position.y, target.x - position.x), nx = Math.cos(angle), ny = Math.sin(angle);
+    const offset = cfg.radius + GameConfig.enemies.fighter.radius + 8;
+    for (let i = 0; i < cfg.wingSize; i++) {
+      if (health.current <= 0 || world.destructionQueue.has(id) || world.isGameOver || world.inMenu) break;
+      const side = i % 2 ? 1 : -1;
+      this._spawnEnemy(world, 'fighter', { x: position.x + nx * 8 - ny * offset * side,
+        y: position.y + ny * 8 + nx * offset * side, rotation: angle, direction: side,
+        hpMultiplier: cfg.fighterHpMultiplier, damageMultiplier: cfg.fighterDamageMultiplier, rewardMultiplier: cfg.fighterRewardMultiplier });
+      this.totalEnemiesInWave++; this.enemiesSpawned++;
+    }
+    world.eventBus.emit('WAVE_PROGRESS', { wave: this.currentWave, total: this.totalEnemiesInWave, spawned: this.enemiesSpawned,
+      alive: world.getEntitiesWith(EnemyComponent).filter(entity => world.getComponent(entity, EnemyComponent).type !== 'boss_shield').length });
   }
 
   _spawnSplitterShards(world, x, y) {
     const archetype = GameConfig.enemies.splitter_shard;
     if (!archetype) return;
 
-    const hpMultiplier = Math.pow(GameConfig.waves.hpScaleFactor, this.currentWave - 1);
+    const stage = getStage(this.stageId);
+    const hpMultiplier = Math.pow(GameConfig.waves.hpScaleFactor, this.currentWave - 1) * (stage?.hpMultiplier || 1);
     const scaledHp = Math.round(archetype.baseHp * hpMultiplier);
-    const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, this.currentWave - 1);
+    const dmgMultiplier = Math.pow(GameConfig.waves.damageScaleFactor, this.currentWave - 1) * (stage?.damageMultiplier || 1);
     const scaledDamage = Math.max(1, Math.round(archetype.baseDamage * dmgMultiplier));
-    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, this.currentWave - 1));
+    const rewardMultiplier = Math.pow(GameConfig.waves.rewardScaleFactor || 1.04, Math.max(0, this.currentWave - 1)) * (stage?.rewardMultiplier || 1);
     const scaledReward = Math.max(1, Math.round(archetype.baseReward * rewardMultiplier));
 
     const towerX = world.width / 2;

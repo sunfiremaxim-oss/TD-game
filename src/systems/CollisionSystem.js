@@ -13,6 +13,8 @@ import { HealthComponent } from '../components/HealthComponent.js';
 import { VelocityComponent } from '../components/VelocityComponent.js';
 import { RenderComponent } from '../components/RenderComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
+import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
 
 export class CollisionSystem {
   update(world, deltaTime) {
@@ -104,12 +106,31 @@ export class CollisionSystem {
         if (enemyHealth.current <= 0) continue;
 
         const enemyComp = world.getComponent(enemyId, EnemyComponent);
-        if (!enemyComp || enemyComp.isSniper || enemyComp.type === 'boss_shield') continue; // Snipers shoot from afar, boss shields are armor
+        if (!enemyComp || enemyComp.isSniper || enemyComp.type === 'boss_shield' || enemyComp.type === 'boss_carrier' || enemyComp.type === 'boss_railgun') continue;
 
         const enemyTrans = world.getComponent(enemyId, TransformComponent);
         const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
 
         const dist = Math.hypot(towerTrans.x - enemyTrans.x, towerTrans.y - enemyTrans.y);
+        const drill = enemyComp.type === 'boss_architect' ? world.getComponent(enemyId, ArchitectDrillComponent) : null;
+        if (drill) {
+          const cfg = GameConfig.enemies.boss_architect;
+          const siege = world.getComponent(enemyId, ArchitectSiegeComponent);
+          const towerHealth = world.getComponent(towerId, HealthComponent);
+          const reach = towerCol.radius + enemyCol.radius + cfg.drillGap;
+          if (world.isGameOver || world.destructionQueue.has(enemyId) || !towerHealth || towerHealth.current <= 0 ||
+              !drill.aimReady || enemyComp.knockbackRemaining > 0 || dist > reach + 0.5) {
+            drill.active = false; drill.elapsed = 0; drill.tickRemainder = 0;
+            // Displacement stops the beams immediately. Keep the cycle frozen
+            // while realigning, so knockback cannot skip an overheating window.
+            continue;
+          }
+          const hitX = towerTrans.x + (enemyTrans.x - towerTrans.x) / Math.max(dist, 1e-9) * towerCol.radius;
+          const hitY = towerTrans.y + (enemyTrans.y - towerTrans.y) / Math.max(dist, 1e-9) * towerCol.radius;
+          if (siege) this._advanceArchitectSiege(world, enemyId, drill, siege, enemyHealth, deltaTime, hitX, hitY);
+          else this._tickArchitectDrill(world, enemyId, drill, enemyHealth, deltaTime, hitX, hitY);
+          continue; // Replaces body-contact attacks, including forced overlaps.
+        }
         const contactDist = towerCol.radius + enemyCol.radius + 3; // 3px contact tolerance
 
         if (dist <= contactDist) {
@@ -133,6 +154,48 @@ export class CollisionSystem {
         }
       }
     }
+  }
+
+  _tickArchitectDrill(world, enemyId, drill, health, seconds, hitX, hitY) {
+    const interval = GameConfig.enemies.boss_architect.drillTickInterval;
+    drill.active = true;
+    drill.elapsed += seconds; drill.tickRemainder += seconds;
+    while (drill.tickRemainder + 1e-9 >= interval) {
+      drill.tickRemainder = Math.max(0, drill.tickRemainder - interval);
+      world.eventBus.emit('TOWER_DRILL', { enemyId, seconds: interval, hitX, hitY });
+      if (world.isGameOver || health.current <= 0 || world.destructionQueue.has(enemyId)) {
+        drill.active = false;
+        break;
+      }
+    }
+  }
+
+  _advanceArchitectSiege(world, id, drill, siege, health, seconds, hitX, hitY) {
+    const cfg = GameConfig.enemies.boss_architect;
+    if (siege.phase === 'approach') {
+      siege.phase = 'windup'; siege.phaseRemaining = cfg.siegeWindup;
+    }
+    // Split boundary-crossing frames: x3 and low FPS must never convert a
+    // cooling interval into extra damage, or drop the last drilling ticks.
+    let remaining = seconds;
+    while (remaining > 1e-9 && !world.isGameOver && health.current > 0 && !world.destructionQueue.has(id)) {
+      const step = Math.min(remaining, siege.phaseRemaining);
+      if (siege.phase === 'drilling') this._tickArchitectDrill(world, id, drill, health, step, hitX, hitY);
+      else { drill.active = false; drill.elapsed = 0; drill.tickRemainder = 0; }
+      siege.phaseRemaining = Math.max(0, siege.phaseRemaining - step);
+      remaining -= step;
+      if (siege.phaseRemaining <= 1e-9) {
+        if (siege.phase === 'windup') {
+          siege.phase = 'drilling'; siege.phaseRemaining = cfg.siegeDrillDuration;
+        } else if (siege.phase === 'drilling') {
+          siege.phase = 'overheated'; siege.phaseRemaining = cfg.siegeCoolingDuration; siege.cycles++;
+        } else {
+          siege.phase = 'windup'; siege.phaseRemaining = cfg.siegeWindup;
+        }
+      }
+    }
+    drill.active = siege.phase === 'drilling' && !world.isGameOver && health.current > 0 && !world.destructionQueue.has(id);
+    if (!drill.active) { drill.elapsed = 0; drill.tickRemainder = 0; }
   }
 
   _redirectRicochet(world, projId, projectile, position, enemies, impactDamage) {

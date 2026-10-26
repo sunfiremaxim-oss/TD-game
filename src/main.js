@@ -23,22 +23,26 @@ import { EnemyComponent } from './components/EnemyComponent.js';
 import { ProjectileComponent } from './components/ProjectileComponent.js';
 
 // Systems
-import { MovementSystem } from './systems/MovementSystem.js?v=2.36';
-import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=2.36';
-import { TargetingSystem } from './systems/TargetingSystem.js?v=2.36';
-import { SniperAISystem } from './systems/SniperAISystem.js?v=2.36';
-import { WeaponSystem } from './systems/WeaponSystem.js?v=2.36';
-import { CollisionSystem } from './systems/CollisionSystem.js?v=2.36';
-import { DamageSystem } from './systems/DamageSystem.js?v=2.36';
-import { WaveSystem } from './systems/WaveSystem.js?v=2.36';
-import { EconomySystem } from './systems/EconomySystem.js?v=2.36';
-import { ParticleSystem } from './systems/ParticleSystem.js?v=2.36';
-import { AudioSystem } from './systems/AudioSystem.js?v=2.36';
-import { RenderSystem } from './systems/RenderSystem.js?v=2.36';
+import { MovementSystem } from './systems/MovementSystem.js?v=3.04';
+import { CarrierAISystem } from './systems/CarrierAISystem.js?v=3.04';
+import { RailgunAISystem } from './systems/RailgunAISystem.js?v=3.04';
+import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=3.04';
+import { TargetingSystem } from './systems/TargetingSystem.js?v=3.04';
+import { SniperAISystem } from './systems/SniperAISystem.js?v=3.04';
+import { WeaponSystem } from './systems/WeaponSystem.js?v=3.04';
+import { CollisionSystem } from './systems/CollisionSystem.js?v=3.04';
+import { DamageSystem } from './systems/DamageSystem.js?v=3.04';
+import { WaveSystem } from './systems/WaveSystem.js?v=3.04';
+import { EconomySystem } from './systems/EconomySystem.js?v=3.04';
+import { ParticleSystem } from './systems/ParticleSystem.js?v=3.04';
+import { AudioSystem } from './systems/AudioSystem.js?v=3.04';
+import { RenderSystem } from './systems/RenderSystem.js?v=3.04';
 
 // Managers & UI
-import { UpgradeManager } from './managers/UpgradeManager.js?v=2.36';
-import { UIManager } from './ui/UIManager.js?v=2.36';
+import { UpgradeManager } from './managers/UpgradeManager.js?v=3.04';
+import { PlayerProgress } from './managers/PlayerProgress.js';
+import { UIManager } from './ui/UIManager.js?v=3.04';
+import { DevTools } from './ui/DevTools.js?v=3.04';
 
 class GameApp {
   constructor() {
@@ -66,6 +70,7 @@ class GameApp {
     window.addEventListener('resize', () => this._resizeCanvas());
     window.visualViewport?.addEventListener('resize', () => this._resizeCanvas());
     document.addEventListener('visibilitychange', () => this._handleVisibilityChange());
+    window.addEventListener('beforeunload', event => this._handleBeforeUnload(event));
     window.addEventListener('orientationchange', () => {
       this._resizeCanvas();
       setTimeout(() => this._resizeCanvas(), 100);
@@ -112,6 +117,16 @@ class GameApp {
     if (document.hidden && this.gameState === 'PLAYING' && this.world && !this.world.isGameOver && !this.world.isPaused) {
       this.uiManager?.togglePause();
     }
+  }
+
+  _handleBeforeUnload(event) {
+    if (this.gameState !== 'PLAYING' || !this.world || this.world.isGameOver) return;
+    const tower = this.world.getEntitiesWith(TowerComponent, EconomyComponent)[0];
+    const economy = tower === undefined ? null : this.world.getComponent(tower, EconomyComponent);
+    if (!economy || economy.crystalsSettled || economy.runCrystals <= 0) return;
+    // Browsers supply their own text for this native close/reload warning.
+    event.preventDefault();
+    event.returnValue = '';
   }
 
   _resizeCanvas() {
@@ -201,19 +216,22 @@ class GameApp {
   _setupECS() {
     // 1. Create World and Managers
     this.world = new World();
+    this.playerProgress = this.playerProgress || new PlayerProgress();
     this.world.width = this.canvas.viewportWidth || this.canvas.width;
     this.world.height = this.canvas.viewportHeight || this.canvas.height;
     this.world.inMenu = true;
     this._resizeCanvas();
 
-    this.upgradeManager = new UpgradeManager();
+    this.upgradeManager = this.playerProgress.getUpgradeManager({ permanent: false });
     this.particleSystem = new ParticleSystem();
     this.waveSystem = new WaveSystem();
-    this.renderSystem = new RenderSystem(this.canvas, this.particleSystem);
+    this.renderSystem = new RenderSystem(this.canvas, this.particleSystem, document.getElementById('menu-core-canvas'));
 
     // 2. Register Systems in strict architectural pipeline order
+    this.world.registerSystem(new CarrierAISystem());
     this.world.registerSystem(new MovementSystem());
     this.world.registerSystem(new PhysicsSeparationSystem());
+    this.world.registerSystem(new RailgunAISystem());
     this.world.registerSystem(new TargetingSystem());
     this.world.registerSystem(new SniperAISystem());
     this.world.registerSystem(new WeaponSystem());
@@ -233,8 +251,19 @@ class GameApp {
     if (this.uiManager) {
       this.uiManager.destroy();
     }
-    this.uiManager = new UIManager(this.world, this.upgradeManager, this.audioSystem);
+    this.uiManager = new UIManager(this.world, this.upgradeManager, this.audioSystem, this.playerProgress);
     this.uiManager.init();
+    this.playerProgress.init(this.world);
+    const syncPermanentProgress = () => {
+      if (!this.world.inMenu) return;
+      this.upgradeManager.setPermanentLevels(this.playerProgress.upgrades, this.playerProgress.unlockedTiers);
+      this._resetTowerStats();
+      this.uiManager.renderUpgrades();
+      this.uiManager.updateHUD();
+    };
+    this.world.eventBus.on('PERMANENT_UPGRADE_PURCHASED', syncPermanentProgress);
+    this.world.eventBus.on('UPGRADE_TIER_UNLOCKED', syncPermanentProgress);
+    this.world.eventBus.on('PROGRESS_RESET', syncPermanentProgress);
     this.uiManager.showMainMenu();
 
     // 5. Handle lifecycle events via EventBus
@@ -249,9 +278,16 @@ class GameApp {
     this.world.eventBus.on('RESTART_GAME', () => {
       this.restartGame();
     });
+    this.devTools?.destroy();
+    this.devTools = GameConfig.devTools.enabled ? new DevTools(this) : null;
   }
 
   startGame() {
+    const stage = this.uiManager.selectedStage || 1;
+    if (!this.playerProgress.isStageUnlocked(stage)) return;
+    this.upgradeManager.setPermanentLevels(this.playerProgress.upgrades, this.playerProgress.unlockedTiers);
+    this._resetTowerStats();
+    this.uiManager.renderUpgrades();
     this.gameState = 'PLAYING';
     this.world.inMenu = false;
     this.world.isPaused = false;
@@ -268,7 +304,7 @@ class GameApp {
     this._resizeCanvas();
 
     // Begin Wave 1
-    this.waveSystem.startFirstWave(this.world);
+    this.waveSystem.startFirstWave(this.world, stage);
     this.uiManager.updateHUD();
   }
 
@@ -277,6 +313,8 @@ class GameApp {
     this.world.inMenu = true;
     this.world.isPaused = false;
     this.world.isGameOver = false;
+    this.world.runOutcome = null;
+    this.world.stageId = null;
     this.world.gameSpeed = 1.0;
 
     // Purge active entities and reset systems
@@ -297,6 +335,7 @@ class GameApp {
   }
 
   restartGame() {
+    const stage = this.world.stageId || this.uiManager.selectedStage || 1;
     this.gameState = 'PLAYING';
     this.world.inMenu = false;
     this.world.isPaused = false;
@@ -316,7 +355,7 @@ class GameApp {
     // Restart random background music strictly from the beginning
     this.audioSystem.restartBGM();
 
-    this.waveSystem.startFirstWave(this.world);
+    this.waveSystem.startFirstWave(this.world, stage);
     this.uiManager.updateHUD();
   }
 
@@ -383,6 +422,9 @@ class GameApp {
       economy.credits = towerCfg.startCredits;
       economy.killMultiplier = 1.0;
       economy.waveMultiplier = 1.0;
+      economy.runCrystals = 0;
+      economy.lastCrystalRewardWave = 0;
+      economy.crystalsSettled = false;
     }
 
     const target = this.world.getComponent(towerId, TargetComponent);
@@ -458,7 +500,7 @@ class GameApp {
   }
 
   resumeAfterAd() {
-    if (this.world && this.gameState === 'PLAYING') {
+    if (this.world && this.gameState === 'PLAYING' && !this.world.isGameOver) {
       this.world.isPaused = false;
       this.uiManager?._updatePauseButton();
     }
@@ -470,6 +512,7 @@ class GameApp {
     const rawDelta = (timestamp - this.lastTime) / 1000;
     this.lastTime = timestamp;
     this.uiManager?.updateFps(timestamp);
+    this.devTools?.update(timestamp);
 
     // Strict delta time clamping to prevent physics explosions / NaN on tab changes or system lag
     const validDelta = (isFinite(rawDelta) && rawDelta >= 0) ? rawDelta : 0.016;

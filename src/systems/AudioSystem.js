@@ -1,3 +1,5 @@
+import { t } from '../i18n/I18n.js';
+
 /**
  * AudioSystem.js
  * Procedural Web Audio API sound synthesizer driven by EventBus events.
@@ -22,7 +24,9 @@ export class AudioSystem {
     // Background music playlist
     this.tracks = [
       'music/background_music_1.mp3',
-      'music/background_music_2.mp3'
+      'music/background_music_2.mp3',
+      'music/background_music_3.mp3',
+      'music/background_music_4.mp3'
     ];
     this.currentTrackIndex = -1;
     this._shuffledQueue = [];
@@ -416,12 +420,12 @@ export class AudioSystem {
 
   getSfxLabel() {
     if (this.sfxMuted || this.sfxVolume === 0) {
-      return { icon: '🔇', text: 'ЗВУК ВЫКЛ', title: 'Звуки игры: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)', isMuted: true };
+      return { icon: '🔇', text: t('ЗВУК ВЫКЛ'), title: t('Звуки игры: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)'), isMuted: true };
     }
     const pct = Math.round(this.sfxVolume * 100);
     const icon = pct > 70 ? '🔊' : (pct > 30 ? '🔉' : '🔈');
-    const text = pct === 100 ? 'ЗВУК' : `ЗВУК ${pct}%`;
-    return { icon, text, title: `Звуки игры: ${pct}% (Клик: открыть слайдер, ПКМ: выкл)`, isMuted: false };
+    const text = pct === 100 ? t('ЗВУК') : t('ЗВУК {percent}%', { percent: pct });
+    return { icon, text, title: t('Звуки игры: {percent}% (Клик: открыть слайдер, ПКМ: выкл)', { percent: pct }), isMuted: false };
   }
 
   _updateSfxGain() {
@@ -457,12 +461,12 @@ export class AudioSystem {
 
   getBgmLabel() {
     if (this.bgmMuted || this.bgmVolumeFactor === 0) {
-      return { icon: '🔇', text: 'МУЗЫКА ВЫКЛ', title: 'Фоновая музыка: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)', isMuted: true };
+      return { icon: '🔇', text: t('МУЗЫКА ВЫКЛ'), title: t('Фоновая музыка: ВЫКЛ (Клик: открыть слайдер, ПКМ: вкл)'), isMuted: true };
     }
     const pct = Math.round(this.bgmVolumeFactor * 100);
     const icon = pct > 50 ? '🎵' : '🎶';
-    const text = pct === 100 ? 'МУЗЫКА' : `МУЗЫКА ${pct}%`;
-    return { icon, text, title: `Фоновая музыка: ${pct}% (Клик: открыть слайдер, ПКМ: выкл)`, isMuted: false };
+    const text = pct === 100 ? t('МУЗЫКА') : t('МУЗЫКА {percent}%', { percent: pct });
+    return { icon, text, title: t('Фоновая музыка: {percent}% (Клик: открыть слайдер, ПКМ: выкл)', { percent: pct }), isMuted: false };
   }
 
   // Master toggle (backward compatibility)
@@ -719,6 +723,7 @@ export class AudioSystem {
     });
 
     world.eventBus.on('DAMAGE_DEALT', (event) => {
+      if (event.isContinuous) return;
       if (event.isCrit) {
         this.playCritSound();
       } else {
@@ -752,6 +757,7 @@ export class AudioSystem {
       this.playGameOverSound();
       this.pauseBGM();
     });
+    world.eventBus.on('STAGE_COMPLETED', () => this.pauseBGM());
 
     world.eventBus.on('RESTART_GAME', () => {
       this.restartBGM();
@@ -769,6 +775,27 @@ export class AudioSystem {
   // =========================================================================
   // SYNTHESIZED SOUND GENERATORS (SFX)
   // =========================================================================
+
+  _scheduleSfxEnd(source, nodes, stopTime) {
+    source.onended = () => {
+      source.onended = null;
+      for (const node of [source, ...nodes]) {
+        try { node.disconnect(); } catch (e) {}
+      }
+      if ('buffer' in source) source.buffer = null;
+    };
+    source.stop(stopTime);
+  }
+
+  _getExplosionNoise(ctx) {
+    if (this._explosionNoiseContext === ctx && this._explosionNoiseBuffer) return this._explosionNoiseBuffer;
+    const buffer = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.8), ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    this._explosionNoiseContext = ctx;
+    this._explosionNoiseBuffer = buffer;
+    return buffer;
+  }
 
   playLaserSound(isCrit) {
     if (!this._canPlaySfx()) return;
@@ -792,7 +819,7 @@ export class AudioSystem {
     gain.connect(this._getSfxDestination(ctx));
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.08);
+    this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.08);
   }
 
   playHitSound() {
@@ -814,7 +841,7 @@ export class AudioSystem {
     gain.connect(this._getSfxDestination(ctx));
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.04);
+    this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.04);
   }
 
   playCritSound() {
@@ -838,7 +865,7 @@ export class AudioSystem {
       gain.connect(this._getSfxDestination(ctx));
 
       osc.start();
-      osc.stop(ctx.currentTime + 0.12);
+      this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.12);
     });
   }
 
@@ -847,16 +874,8 @@ export class AudioSystem {
     const ctx = this._ensureAudioContext();
     if (!ctx) return;
 
-    const bufferSize = Math.floor(ctx.sampleRate * 0.2);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
-    }
-
     const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    noise.buffer = this._getExplosionNoise(ctx);
 
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
@@ -872,8 +891,8 @@ export class AudioSystem {
     filter.connect(gain);
     gain.connect(this._getSfxDestination(ctx));
 
-    noise.start();
-    noise.stop(ctx.currentTime + 0.2);
+    noise.start(ctx.currentTime, Math.random() * 0.6);
+    this._scheduleSfxEnd(noise, [filter, gain], ctx.currentTime + 0.2);
   }
 
   playUpgradeSound() {
@@ -898,7 +917,7 @@ export class AudioSystem {
       gain.connect(this._getSfxDestination(ctx));
 
       osc.start(startTime);
-      osc.stop(startTime + 0.1);
+      this._scheduleSfxEnd(osc, [gain], startTime + 0.1);
     });
   }
 
@@ -921,7 +940,7 @@ export class AudioSystem {
     gain.connect(this._getSfxDestination(ctx));
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.22);
+    this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.22);
   }
 
   playWaveClearSound() {
@@ -944,7 +963,7 @@ export class AudioSystem {
       gain.connect(this._getSfxDestination(ctx));
 
       osc.start(startTime);
-      osc.stop(startTime + 0.15);
+      this._scheduleSfxEnd(osc, [gain], startTime + 0.15);
     });
   }
 
@@ -967,7 +986,7 @@ export class AudioSystem {
     gain.connect(this._getSfxDestination(ctx));
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.8);
+    this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.8);
   }
 
   playBlinkerDashSound() {
@@ -989,6 +1008,6 @@ export class AudioSystem {
     gain.connect(this._getSfxDestination(ctx));
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.14);
+    this._scheduleSfxEnd(osc, [gain], ctx.currentTime + 0.14);
   }
 }

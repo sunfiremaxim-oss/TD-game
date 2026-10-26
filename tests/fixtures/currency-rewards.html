@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка наград за уничтожение</title>
+<link rel="stylesheet" href="../../css/fonts.css">
+<style>
+  body { margin: 0; padding: 24px; color: #a8c4d7; background: #070d17; font: 18px 'WDXL Lubrifont SC', sans-serif; }
+  canvas { display: block; max-width: 100%; background: #090f1c; border: 1px solid #24364a; }
+  p { max-width: 600px; }
+</style>
+<h1>Награды за уничтожение</h1>
+<p>Один враг одновременно даёт кредиты и микрочип. Слева обычная награда, справа повышенная.</p>
+<canvas id="rewards" width="600" height="280"></canvas>
+<script type="module">
+  import { World } from '../../src/core/World.js';
+  import { ParticleSystem } from '../../src/systems/ParticleSystem.js';
+  import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.63';
+  const canvas = document.getElementById('rewards'), ctx = canvas.getContext('2d');
+  const world = new World(), particles = new ParticleSystem();
+  particles.init(world);
+  const renderer = Object.assign(Object.create(RenderSystem.prototype), { particleSystem: particles });
+  for (const [x, earned] of [[150, 10], [450, 50]]) {
+    world.eventBus.emit('RUN_CRYSTALS_CHANGED', { source: 'kill', earned: 1, x, y: 165 });
+    world.eventBus.emit('CREDITS_CHANGED', { source: 'kill', earned, x, y: 165 });
+  }
+  await document.fonts.ready;
+  for (let i = 0; i < 21; i++) particles.update(world, 1 / 60);
+  renderer._drawFloatingTexts(ctx);
+</script>
+</html>

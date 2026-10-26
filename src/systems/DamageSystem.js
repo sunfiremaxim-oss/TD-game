@@ -11,11 +11,24 @@ import { EnemyComponent } from '../components/EnemyComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { DefenseComponent } from '../components/DefenseComponent.js';
 import { CircleColliderComponent } from '../components/CircleColliderComponent.js';
+import { DevControlComponent } from '../components/DevControlComponent.js';
+import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
 
 import { calculateMitigatedDamage } from '../combat/DamageCalculation.js?v=2.7';
 
 export class DamageSystem {
   init(world) {
+    world.eventBus.on('TOWER_DRILL', event => {
+      const sourceHealth = world.getComponent(event.enemyId, HealthComponent);
+      const drill = world.getComponent(event.enemyId, ArchitectDrillComponent);
+      const enemy = world.getComponent(event.enemyId, EnemyComponent);
+      if (world.isGameOver || !drill?.active || !enemy || !sourceHealth || sourceHealth.current <= 0 ||
+          world.destructionQueue.has(event.enemyId) || !Number.isFinite(event.seconds) || event.seconds <= 0) return;
+      const tower = world.getEntitiesWith(TowerComponent)[0];
+      if (tower === undefined) return;
+      this._applyDamageToEntity(world, tower, enemy.damage, false, event.hitX, event.hitY,
+        { sourceId: event.enemyId, sourceHealth, kind: 'drill', damageScale: event.seconds });
+    });
     // 1. Listen for player projectile hitting enemy
     world.eventBus.on('PROJECTILE_HIT', (event) => {
       this._applyDamageToEntity(world, event.targetId, event.damage, event.isCrit, event.hitX, event.hitY,
@@ -67,10 +80,15 @@ export class DamageSystem {
     if (!health || health.current <= 0 || world.destructionQueue.has(targetId)) return;
 
     const isTower = world.hasComponent(targetId, TowerComponent);
-    const netDamage = calculateMitigatedDamage(world, targetId, rawDamage);
+    const dev = isTower ? world.getComponent(targetId, DevControlComponent) : null;
+    if (GameConfig.devTools.enabled && dev?.enabled && dev.invulnerable) return;
+    // Mitigate DPS once, then apply a time slice: flat armor and minimum damage
+    // must not become stronger or weaker just because the attack has more ticks.
+    const damageScale = context?.damageScale ?? 1;
+    const netDamage = calculateMitigatedDamage(world, targetId, rawDamage) * damageScale;
 
     const actualDamage = Math.min(health.current, netDamage);
-    health.current -= netDamage;
+    health.current = Math.max(0, health.current - netDamage);
 
     // Get position for particle/text feedback
     const trans = world.getComponent(targetId, TransformComponent);
@@ -83,6 +101,7 @@ export class DamageSystem {
       actualDamage,
       sourceId: context?.sourceId,
       damageKind: context?.kind,
+      isContinuous: context?.damageScale !== undefined,
       isCrit: !!isCrit,
       isTower,
       x: posX,
@@ -165,10 +184,11 @@ export class DamageSystem {
     // A sniper can die long before its bullet arrives. Never hit a recycled ID.
     if (!world.hasComponent(sourceId, EnemyComponent) || world.destructionQueue.has(sourceId) ||
         world.getComponent(sourceId, HealthComponent) !== context.sourceHealth || context.sourceHealth.current <= 0) return;
-    const reflected = Math.floor(damageTaken * defense.damageReflection);
+    const damageScale = context.damageScale ?? 1;
+    const reflected = Math.floor(damageTaken / damageScale * defense.damageReflection + 1e-9);
     if (reflected <= 0) return;
     this._applyDamageToEntity(world, sourceId, reflected, false, undefined, undefined,
-      { sourceId: towerId, kind: 'reflection' });
+      { sourceId: towerId, kind: 'reflection', ...(context.damageScale !== undefined ? { damageScale } : {}) });
   }
 
   _applyLifeSteal(world, towerId, damageDealt) {
@@ -192,7 +212,7 @@ export class DamageSystem {
     const target = world.getComponent(targetId, TransformComponent);
     if (!origin || !target) return;
     const mass = world.getComponent(targetId, CircleColliderComponent)?.mass || 1;
-    const resistance = enemy.type === 'boss_architect' ? GameConfig.combat.bossKnockbackMultiplier : 1 / Math.sqrt(Math.max(1, mass));
+    const resistance = enemy.type.startsWith('boss_') ? GameConfig.combat.bossKnockbackMultiplier : 1 / Math.sqrt(Math.max(1, mass));
     const speed = defense.knockbackPower * resistance / GameConfig.combat.knockbackDuration;
     const dx = target.x - origin.x;
     const dy = target.y - origin.y;

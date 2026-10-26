@@ -5,27 +5,34 @@
  */
 
 import { GameConfig } from '../config/GameConfig.js';
+import { normalizeUpgradeTiers, hasUpgradeAccess } from '../config/UpgradeTiers.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { AttackComponent } from '../components/AttackComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { ArmorComponent } from '../components/ArmorComponent.js';
 import { EconomyComponent } from '../components/EconomyComponent.js';
 import { DefenseComponent } from '../components/DefenseComponent.js';
+import { t } from '../i18n/I18n.js';
 
 export class UpgradeManager {
-  constructor() {
+  constructor(permanentLevels = {}, unlockedTiers = {}, { permanent = false } = {}) {
+    this.permanent = permanent;
     this.levels = new Map();
-    this._lastFreeWave = 0;
-    for (const key of Object.keys(GameConfig.upgrades)) {
-      this.levels.set(key, 0);
-    }
+    this.setPermanentLevels(permanentLevels, unlockedTiers);
+  }
+
+  setPermanentLevels(levels = {}, unlockedTiers = this.unlockedTiers) {
+    this.unlockedTiers = normalizeUpgradeTiers(unlockedTiers);
+    this.permanentLevels = new Map(Object.keys(GameConfig.upgrades).map(id =>
+      [id, this.hasAccess(id) && Number.isSafeInteger(levels[id]) && levels[id] >= 0 ? levels[id] : 0]));
+    this.reset();
   }
 
   reset() {
     this._lastFreeWave = 0;
     this.levels.clear();
     for (const key of Object.keys(GameConfig.upgrades)) {
-      this.levels.set(key, 0);
+      this.levels.set(key, this.permanentLevels.get(key) || 0);
     }
   }
 
@@ -34,9 +41,10 @@ export class UpgradeManager {
   }
 
   getLockReason(upgradeId) {
+    if (!this.hasAccess(upgradeId)) return t('Откройте тир в постоянных улучшениях.');
     const req = GameConfig.upgrades[upgradeId]?.requires;
     return req && !this.isUnlocked(upgradeId)
-      ? `Сначала: ${GameConfig.upgrades[req.id].name}, ур. ${req.minLevel || 1}` : '';
+      ? t('Сначала: {name}, ур. {level}', { name: t(GameConfig.upgrades[req.id].name), level: req.minLevel || 1 }) : '';
   }
 
 
@@ -45,6 +53,7 @@ export class UpgradeManager {
   }
 
   isUnlocked(upgradeId) {
+    if (!this.hasAccess(upgradeId)) return false;
     const def = GameConfig.upgrades[upgradeId];
     if (def && def.requires) {
       const reqLvl = this.getLevel(def.requires.id);
@@ -55,12 +64,14 @@ export class UpgradeManager {
     return true;
   }
 
+  hasAccess(upgradeId) { return hasUpgradeAccess(upgradeId, this.unlockedTiers); }
+
   getCost(upgradeId) {
     const def = GameConfig.upgrades[upgradeId];
     if (!def) return Infinity;
     const lvl = this.getLevel(upgradeId);
-    if (def.maxLevel && lvl >= def.maxLevel) return Infinity;
-    return Math.round(def.baseCost * Math.pow(def.costMultiplier, lvl));
+    const multiplier = this.permanent ? 1 : GameConfig.battleUpgradeCostMultiplier;
+    return Math.max(1, Math.round(def.baseCost * Math.pow(def.costMultiplier, lvl) * multiplier));
   }
 
   canAfford(upgradeId, credits) {
@@ -76,12 +87,15 @@ export class UpgradeManager {
   _valueAtLevel(upgradeId, level) {
     const def = GameConfig.upgrades[upgradeId];
     if (!def) return 0;
-    const lvl = def.maxLevel ? Math.min(level, def.maxLevel) : level;
+    const lvl = this.hasAccess(upgradeId) ? level : 0;
+    if (upgradeId === 'critChance' && !this.hasAccess(upgradeId)) return 0;
 
     switch (upgradeId) {
       case 'rapidFireChance':
         // Sum diminishing increments without iterating through every purchased level.
         return def.baseValue + def.valuePerLevel * -Math.expm1(lvl * Math.log(def.valueDecay)) / (1 - def.valueDecay);
+      case 'crystalDropChance':
+        return GameConfig.crystals.baseDropChance + lvl * def.valuePerLevel;
       case 'damage':
         return GameConfig.tower.baseDamage + lvl * def.valuePerLevel;
       case 'attackSpeed':
@@ -94,14 +108,12 @@ export class UpgradeManager {
         return GameConfig.tower.baseMultishotChance + lvl * def.valuePerLevel;
       case 'multishotTargets':
         return GameConfig.tower.baseMultishotCount + lvl * def.valuePerLevel;
-      case 'range': {
-        const effectiveLvl = def.maxLevel ? Math.min(lvl, def.maxLevel) : lvl;
-        return GameConfig.tower.baseRange + effectiveLvl * def.valuePerLevel;
-      }
+      case 'range':
+        return GameConfig.tower.baseRange + lvl * def.valuePerLevel;
       case 'maxHealth':
         return GameConfig.tower.baseHealth + lvl * def.valuePerLevel;
       case 'armorPercent':
-        return Math.min(0.85, GameConfig.tower.basePercentArmor + lvl * def.valuePerLevel);
+        return GameConfig.tower.basePercentArmor + lvl * def.valuePerLevel;
       case 'flatArmor':
         return GameConfig.tower.baseFlatArmor + lvl * def.valuePerLevel;
       case 'healthRegen':
@@ -165,8 +177,7 @@ export class UpgradeManager {
     const granted = [];
     for (const { category, chance } of rolls) {
       if (chance <= 0 || Math.random() >= chance) continue;
-      const candidates = Object.values(GameConfig.upgrades).filter(def => def.category === category &&
-        this.isUnlocked(def.id) && (!def.maxLevel || this.getLevel(def.id) < def.maxLevel));
+      const candidates = Object.values(GameConfig.upgrades).filter(def => def.category === category && this.isUnlocked(def.id));
       if (candidates.length === 0) continue;
       const def = candidates[Math.floor(Math.random() * candidates.length)];
       this._grantLevel(def.id, world, towerId, 0, true);
@@ -244,6 +255,12 @@ export class UpgradeManager {
         break;
       case 'waveCashBonus':
         if (economy) economy.waveMultiplier = newVal;
+        break;
+      case 'crystalDropChance':
+        if (economy) economy.crystalDropChance = newVal;
+        break;
+      case 'crystalWaveBonus':
+        if (economy) economy.crystalWaveMultiplier = newVal;
         break;
     }
   }

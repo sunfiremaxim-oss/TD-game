@@ -1,0 +1,30 @@
+/* Temporary desktop-only rail. Disable GameConfig.devTools.enabled to remove it. */
+#devtools { display: none; }
+@media (min-width: 1101px) and (min-height: 601px) and (hover: hover) and (pointer: fine) {
+  .battle-layout.devtools-mounted:not(.in-menu) #game-viewport { grid-template-columns: clamp(224px, 16vw, 270px) minmax(0, 1fr) calc(480 * var(--desktop-unit)); }
+  .battle-layout.devtools-mounted.devtools-collapsed:not(.in-menu) #game-viewport { grid-template-columns: 44px minmax(0, 1fr) calc(480 * var(--desktop-unit)); }
+  .devtools-mounted:not(.in-menu) #devtools { display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: #0b1421; border-right: 1px solid #8a714d66; color: #b9cddb; font: 400 16px/1.25 var(--font-ui); }
+  #devtools button, #devtools input, #devtools select { font: inherit; color: inherit; }
+  #devtools button, #devtools input[type="number"], #devtools select { min-width: 0; min-height: 32px; border: 1px solid #314757; border-radius: 5px; background: #172939; padding: 5px 7px; }
+  #devtools button { cursor: pointer; }
+  #devtools button:hover { border-color: #c4a369; background: #24394a; }
+  #devtools button:disabled, #devtools input:disabled, #devtools select:disabled { opacity: .4; cursor: default; }
+  #devtools input[type="checkbox"] { accent-color: #d9b977; width: 17px; height: 17px; flex: none; }
+  #devtools .dev-header { display: flex; justify-content: space-between; align-items: center; gap: 7px; padding: 10px; border-bottom: 1px solid #8a714d44; color: #e2c48b; }
+  #devtools .dev-header strong { font-size: 18px; letter-spacing: 1px; }
+  #devtools .dev-header button { min-width: 30px; }
+  #devtools .dev-body { overflow-y: auto; min-height: 0; padding: 10px; scrollbar-width: thin; scrollbar-color: #3c5266 transparent; }
+  #devtools .dev-body[hidden] { display: none; }
+  #devtools fieldset { margin: 0 0 14px; padding: 0; border: 0; min-width: 0; }
+  #devtools legend { color: #d3b77f; font-size: 14px; letter-spacing: .7px; margin-bottom: 7px; }
+  #devtools label { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  #devtools .dev-row { display: flex; gap: 6px; margin-bottom: 7px; }
+  #devtools .dev-row > * { flex: 1; width: 0; }
+  #devtools select, #devtools .dev-wide { display: block; width: 100%; margin-bottom: 7px; }
+  #devtools .dev-number { flex-direction: column; align-items: stretch; font-size: 14px; }
+  #devtools .dev-status { display: block; margin-bottom: 10px; color: #7f9bac; font-size: 14px; }
+  #devtools .dev-note { color: #657d91; font-size: 13px; margin: 3px 0 8px; }
+  .devtools-collapsed #devtools .dev-header { padding: 5px; flex-direction: column; }
+  .devtools-collapsed #devtools .dev-header strong { font-size: 12px; letter-spacing: 0; }
+}
+.dev-reset-confirm[hidden] { display: none; }

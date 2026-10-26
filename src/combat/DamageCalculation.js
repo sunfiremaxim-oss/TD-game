@@ -3,18 +3,36 @@ import { TransformComponent } from '../components/TransformComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { ProjectileComponent } from '../components/ProjectileComponent.js';
+import { CarrierComponent } from '../components/CarrierComponent.js';
+import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
+import { RailgunComponent } from '../components/RailgunComponent.js';
+import { GameConfig } from '../config/GameConfig.js';
 
 // Shared mitigation for real hits and targeting predictions. Does not mutate the world.
 export function calculateMitigatedDamage(world, targetId, rawDamage) {
   const armor = world.getComponent(targetId, ArmorComponent);
 
-  // Armor mitigation: flat subtraction followed by capped percentage reduction
+  // Tower upgrades are uncapped; mitigation cannot turn incoming damage into healing.
   const flatRed = armor ? (armor.flatReduction || 0) : 0;
   const rawPct = armor ? (armor.percentReduction || 0) : 0;
-  const cappedPct = Math.min(0.85, rawPct); // Soft cap at 85%
+  const cappedPct = Math.max(0, Math.min(world.hasComponent(targetId, TowerComponent) ? 1 : 0.85, rawPct));
 
   const damageAfterFlat = Math.max(1, rawDamage - flatRed);
   let netDamage = Math.max(1, Math.round(damageAfterFlat * (1 - cappedPct)));
+  const carrier = world.getComponent(targetId, CarrierComponent);
+  if (carrier) {
+    const cfg = GameConfig.enemies.boss_carrier;
+    netDamage = Math.max(1, Math.round(netDamage * (carrier.phase === 'exposed' ? cfg.exposedDamageMultiplier : cfg.closedDamageMultiplier)));
+  }
+  const rail = world.getComponent(targetId,RailgunComponent);
+  if (rail?.phase === 'cooldown') netDamage = Math.max(1,Math.round(netDamage * GameConfig.enemies.boss_railgun.coolingDamageMultiplier));
+  const siege = world.getComponent(targetId, ArchitectSiegeComponent);
+  if (siege) {
+    const cfg = GameConfig.enemies.boss_architect;
+    const multiplier = siege.phase === 'overheated' ? cfg.overheatedDamageMultiplier
+      : siege.phase === 'approach' || siege.phase === 'windup' ? cfg.approachDamageMultiplier : 1;
+    netDamage = Math.max(1, Math.round(netDamage * multiplier));
+  }
 
   // Aegis Dome Defense: 50% damage reduction for all enemies inside an active Aegis dome
   if (!world.hasComponent(targetId, TowerComponent)) {

@@ -16,7 +16,7 @@ export class EnemyComponent {
     meleeInterval = 1.0,
     shieldDomeRadius = 0
   ) {
-    this.type = type; // 'scout' | 'fighter' | 'tank' | 'sniper' | 'aegis' | 'splitter' | 'splitter_shard' | 'blinker' | 'boss_architect' | 'boss_shield'
+    this.type = type; // Regular enemies, campaign bosses, or legacy boss_shield.
     this.baseReward = baseReward;
     this.isSniper = isSniper;
     this.shootCooldown = shootCooldown;
@@ -35,7 +35,7 @@ export class EnemyComponent {
     // Blinker teleport dash
     this.blinkCooldown = 2.0;
 
-    // Boss Architect orbital shield ring
+    // Legacy orbital segments (not used by the current Architect).
     this.shieldIds = null;
     this.shieldOrbitRadius = 0;
     this.shieldOrbitSpeed = 0;

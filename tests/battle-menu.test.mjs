@@ -68,4 +68,25 @@ for (const [button, event] of [['btnBattleRestart', 'RESTART_GAME'], ['btnBattle
     assert.equal(ui.dom.volumePopover.hidden, true);
     assert.equal(events.at(-1)[0], event);
   });
+  test(`${event} warns about pending crystals, allows cancellation, and requires explicit confirmation`, () => {
+    const { ui, world, events } = setup();
+    const economy = { runCrystals: 17, crystalsSettled: false };
+    world.getEntitiesWith = () => [1]; world.getComponent = () => economy;
+    ui.openBattleMenu();
+    ui.dom[button].handlers.click();
+    assert.equal(ui.dom.abandonConfirm.hidden, false);
+    assert.equal(ui.dom.battleMenuMain.hidden, true);
+    assert.match(ui.dom.abandonText.textContent, /микрочипы за этот бой: 17\./);
+    assert.equal(events.some(e => e[0] === event), false);
+    ui._handleKeyDown({ key: 'Escape' });
+    assert.equal(ui.dom.abandonConfirm.hidden, true); assert.equal(world.isPaused, true);
+    assert.equal(economy.runCrystals, 17);
+    ui.dom[button].handlers.click(); ui.dom.abandonCancel.handlers.click();
+    assert.equal(events.some(e => e[0] === event), false);
+    ui.dom[button].handlers.click(); ui.dom.abandonAccept.handlers.click();
+    assert.equal(events.filter(e => e[0] === event).length, 1);
+    assert.equal(ui.dom.modalBattleMenu.classList.contains('hidden'), true);
+    ui.dom.abandonAccept.handlers.click();
+    assert.equal(events.filter(e => e[0] === event).length, 1);
+  });
 }

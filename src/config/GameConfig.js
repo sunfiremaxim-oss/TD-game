@@ -3,7 +3,10 @@
  * Central configuration for constants, enemy archetypes, visual styles, and upgrades.
  */
 
+import { t } from '../i18n/I18n.js';
+
 export const GameConfig = {
+  devTools: { enabled: true }, // Temporary desktop playtest panel. One switch removes its UI and effects.
   // Canvas and coordinate settings
   canvas: {
     width: 1200,
@@ -59,7 +62,7 @@ export const GameConfig = {
     basePercentArmor: 0.0,
     baseFlatArmor: 0,
     baseDistanceDamageCoeff: 0.0,
-    startCredits: 100
+    startCredits: 0
   },
 
   // Enemy archetypes
@@ -68,9 +71,9 @@ export const GameConfig = {
       type: 'scout',
       sides: 3,             // Triangle
       radius: 12,
-      baseSpeed: 105,
+      baseSpeed: 73.5,
       mass: 1.0,
-      baseHp: 17,           // One base hit through wave 5: round(17 * 1.1^4) = 25
+      baseHp: 25,           // One base hit on stage 1 wave 1; 28 HP on wave 2.
       baseDamage: 12,
       baseReward: 10,
       color: '#ffe600',
@@ -81,7 +84,25 @@ export const GameConfig = {
       type: 'fighter',
       sides: 4,             // Dart / Sharp diamond
       radius: 11,
-      baseSpeed: 155,       // Fast
+      baseSpeed: 108.5,     // Fast
+      flight: {
+        spiralMin: 2.6, spiralMax: 3.4, // Tangential / inward velocity; chosen once per fighter.
+        unwindDistance: 44,
+        lookAhead: 0.85,
+        reactionTime: 0.26,
+        clearance: 7,
+        turnSpeed: 9
+      },
+      escort: {
+        seekDistance: 350, // Independent tank search, like a sniper seeking Aegis.
+        detachDistance: 450, // Hysteresis: do not lose a newly found distant tank next frame.
+        rearGap: 10,
+        joinTolerance: 8,
+        followGain: 4,
+        releaseDepth: 0.5,
+        chargeMultiplier: 1.65,
+        accelerationTime: 0.55
+      },
       mass: 0.7,            // Light mass, pushes away easily
       baseHp: 32,
       baseDamage: 18,
@@ -94,7 +115,7 @@ export const GameConfig = {
       type: 'tank',
       sides: 6,             // Hexagon
       radius: 22,
-      baseSpeed: 52,        // Slow
+      baseSpeed: 36.4,      // Slow
       mass: 8.0,            // Heavy mass, almost immovable
       baseHp: 220,
       baseDamage: 45,
@@ -107,7 +128,7 @@ export const GameConfig = {
       type: 'sniper',
       sides: 4,             // Diamond
       radius: 14,
-      baseSpeed: 80,
+      baseSpeed: 56,
       mass: 1.5,
       baseHp: 53,           // About 30% less HP for the ranged archetype
       baseDamage: 22,
@@ -127,7 +148,7 @@ export const GameConfig = {
       type: 'aegis',
       sides: 5,             // Pentagon
       radius: 19,
-      baseSpeed: 48,        // Slow fortress
+      baseSpeed: 33.6,      // Slow fortress
       mass: 4.5,
       baseHp: 180,
       baseDamage: 25,
@@ -144,7 +165,7 @@ export const GameConfig = {
       type: 'splitter',
       sides: 3,             // Triangle fractal
       radius: 14,
-      baseSpeed: 82,
+      baseSpeed: 57.4,
       mass: 1.2,
       baseHp: 65,
       baseDamage: 18,
@@ -157,7 +178,7 @@ export const GameConfig = {
       type: 'splitter_shard',
       sides: 3,             // Fast small triangle shard
       radius: 7,
-      baseSpeed: 185,       // Fast sprint to tower
+      baseSpeed: 129.5,     // Fast sprint to tower
       mass: 0.4,
       baseHp: 18,
       baseDamage: 10,
@@ -172,7 +193,7 @@ export const GameConfig = {
       type: 'blinker',
       sides: 4,             // Zigzag lightning
       radius: 13,
-      baseSpeed: 95,
+      baseSpeed: 66.5,
       mass: 0.8,
       baseHp: 52,
       baseDamage: 18,
@@ -184,23 +205,54 @@ export const GameConfig = {
       glowBlur: 14
     },
 
-    // 4. Системный Босс: Архитектор (Boss: The Architect) - Giant star fractal with rotating shields
+    // First-stage boss: a larger scout, using ordinary direct movement and melee.
+    boss_scout: {
+      type: 'boss_scout', sides: 3, radius: 48, baseSpeed: 50, mass: 8,
+      baseHp: 320, baseDamage: 20, baseReward: 350,
+      rotationSpeed: .42,
+      color: '#ffe174', glowColor: '#ffd338', glowBlur: 12
+    },
+    // Monolith: retain the legacy boss_architect ID for existing combat code.
     boss_architect: {
       type: 'boss_architect',
-      sides: 8,             // Star fractal
-      radius: 38,
-      baseSpeed: 30,        // Imposing slow march
+      sides: 8,
+      radius: 66,
+      baseSpeed: 45,
       mass: 30.0,
-      baseHp: 1000,         // Scaled heavily by wave
-      baseDamage: 65,       // High contact damage
+      baseHp: 400,          // Stage 3 finale: 3822 HP after wave/stage scaling.
+      baseDamage: 20,       // Stage 3 finale: 96 drill DPS before mitigation.
+      drillGap: 26,
+      rotationSpeed: 0.204,  // Flight and final alignment: +70% from 0.12 rad/s.
+      drillTickInterval: 0.05,
+      siegeWindup: 1.2,
+      siegeDrillDuration: 4,
+      siegeCoolingDuration: 2.5,
+      approachDamageMultiplier: .65,
+      overheatedDamageMultiplier: 1.5,
       baseReward: 350,
-      color: '#ff00aa',
-      glowColor: '#ff00ff',
-      glowBlur: 22,
-      shieldCount: 6,
-      shieldOrbitRadius: 78,
-      shieldOrbitSpeed: 1.2
+      color: '#ff7189',
+      glowColor: '#ff536e',
+      glowBlur: 14
     },
+    // Stage-two boss: a mobile carrier with finite fighter wings and exposed-core windows.
+    boss_carrier: {
+      type: 'boss_carrier', sides: 6, radius: 78, baseSpeed: 38, mass: 18,
+      baseHp: 220, baseDamage: 8, baseReward: 450,
+      color: '#ff4d8b', glowColor: '#ff0055', glowBlur: 13,
+      orbitSpeed: .22, shootInterval: 3.2, projectileSpeed: 190,
+      maxLaunches: 3, wingSize: 2, launchWarning: 1.2, exposedDuration: 3.8, reloadDuration: 2,
+      closedDamageMultiplier: .8, exposedDamageMultiplier: 1.4,
+      fighterHpMultiplier: .45, fighterDamageMultiplier: .5, fighterRewardMultiplier: .5
+    },
+    // Stage-four sniper boss: telegraphed rail shot, cooling window, lateral reposition.
+    boss_railgun: {
+      type: 'boss_railgun', sides: 4, radius: 62, baseSpeed: 43, mass: 20,
+      baseHp: 360, baseDamage: 24, baseReward: 500,
+      color: '#ffb665', glowColor: '#ff7a26', glowBlur: 12,
+      chargeDuration: 1.6, beamDuration: .22, cooldownDuration: 1.1,
+      repositionDuration: 2.2, orbitSpeed: .30, coolingDamageMultiplier: 1.35
+    },
+    // Legacy segments retained for projectile/orbit regression fixtures; not spawned in gameplay.
     boss_shield: {
       type: 'boss_shield',
       sides: 6,
@@ -223,8 +275,8 @@ export const GameConfig = {
     speedJitterMax: 0.07,      // +7%
     hpScaleFactor: 1.10,       // HP = BaseHP * (1.10 ^ (Wave - 1))
     damageScaleFactor: 1.07,   // Damage = BaseDmg * (1.07 ^ (Wave - 1))
-    waveBaseReward: 50,
-    waveRewardGrowth: 25,
+    waveBaseReward: 10,
+    waveRewardGrowth: 5,
     rewardScaleFactor: 1.04    // Smooth economy scaling: Reward = BaseReward * (1.04 ^ (Wave - 1))
   },
 
@@ -251,6 +303,17 @@ export const GameConfig = {
     bossKnockbackMultiplier: 0.15
   },
 
+  crystals: {
+    baseDropChance: 0.01,
+    killReward: 1,
+    waveBaseReward: 2,
+    waveRewardGrowth: 1
+  },
+
+  // Battle prices use credits at one fifth of the permanent microchip price.
+  battleUpgradeCostMultiplier: 0.2,
+  enemyCreditRewardMultiplier: 0.2,
+
   // Upgrade definitions and progression (including level-zero values for new abilities).
   upgrades: {
     // OFFENSE
@@ -272,7 +335,7 @@ export const GameConfig = {
       baseCost: 35,
       costMultiplier: 1.28,
       valuePerLevel: 0.15,
-      format: (val) => `${val.toFixed(2)} /сек`
+      format: (val) => t('{value} /сек', { value: val.toFixed(2) })
     },
     range: {
       id: 'range',
@@ -282,7 +345,6 @@ export const GameConfig = {
       baseCost: 30,
       costMultiplier: 1.25,
       valuePerLevel: 8, // +8px radius per level (reduced from 20px)
-      maxLevel: 20, // max 290px (prevents zone from spilling off-screen)
       format: (val) => `${val.toFixed(0)} px`
     },
     critChance: {
@@ -293,7 +355,6 @@ export const GameConfig = {
       baseCost: 40,
       costMultiplier: 1.32,
       valuePerLevel: 0.02, // +2%
-      maxLevel: 36, // up to 80%
       format: (val) => `${(val * 100).toFixed(0)}%`
     },
     critDamage: {
@@ -314,7 +375,6 @@ export const GameConfig = {
       baseCost: 45,
       costMultiplier: 1.30,
       valuePerLevel: 0.005, // +0.5% per level (smooth, balanced scaling)
-      maxLevel: 40, // up to 20.0%
       format: (val) => `${(val * 100).toFixed(1)}%`
     },
     multishotTargets: {
@@ -325,20 +385,19 @@ export const GameConfig = {
       baseCost: 80,
       costMultiplier: 1.70,
       valuePerLevel: 1, // +1 projectile
-      maxLevel: 5,
       requires: { id: 'multishotChance', minLevel: 1 },
-      format: (val) => `+${val} цели`
+      format: (val) => t('+{value} цели', { value: val })
     },
     ricochetChance: {
       id: 'ricochetChance', category: 'offense', name: 'Шанс рикошета', icon: '↪',
       description: 'Шанс начать цепочку при попадании. Радиус перехода 110 px, каждый переход сохраняет 70% урона; повторные попадания в ту же цель исключены.',
-      baseCost: 70, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.0125, maxLevel: 20,
+      baseCost: 70, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.0125,
       format: val => `${(val * 100).toFixed(2)}%`
     },
     ricochetCount: {
       id: 'ricochetCount', category: 'offense', name: 'Количество рикошетов', icon: '↪',
       description: 'Максимум дополнительных целей в одной сработавшей цепочке рикошетов.',
-      baseCost: 100, costMultiplier: 1.70, baseValue: 1, valuePerLevel: 1, maxLevel: 3,
+      baseCost: 100, costMultiplier: 1.70, baseValue: 1, valuePerLevel: 1,
       requires: { id: 'ricochetChance', minLevel: 1 }, format: val => `${val.toFixed(0)}`
     },
     rapidFireChance: {
@@ -351,7 +410,7 @@ export const GameConfig = {
       id: 'rapidFireDuration', category: 'offense', name: 'Длительность быстрой атаки', icon: '◷',
       description: 'Время действия ускорения ×1.5: от 0.5 с, +0.15 с за уровень без ограничения уровней. Пауза игры останавливает отсчёт.',
       baseCost: 65, costMultiplier: 1.40, baseValue: 0.5, valuePerLevel: 0.15,
-      requires: { id: 'rapidFireChance', minLevel: 1 }, format: val => `${val.toFixed(2)} с`
+      requires: { id: 'rapidFireChance', minLevel: 1 }, format: val => t('{value} с', { value: val.toFixed(2) })
     },
 
     // DEFENSE
@@ -373,8 +432,7 @@ export const GameConfig = {
       baseCost: 40,
       costMultiplier: 1.32,
       valuePerLevel: 0.03, // +3%
-      maxLevel: 28, // soft cap around 85%
-      format: (val) => `${Math.min(85, val * 100).toFixed(0)}%`
+      format: (val) => `${(val * 100).toFixed(0)}%`
     },
     flatArmor: {
       id: 'flatArmor',
@@ -394,30 +452,30 @@ export const GameConfig = {
       baseCost: 40,
       costMultiplier: 1.30,
       valuePerLevel: 1.5, // +1.5 HP/sec
-      format: (val) => `+${val.toFixed(1)}/сек`
+      format: (val) => t('+{value}/сек', { value: val.toFixed(1) })
     },
     damageReflection: {
       id: 'damageReflection', category: 'defense', name: 'Отражение урона', icon: '◇',
       description: 'Возвращает атакующему часть фактически потерянного HP после брони. Урон округляется вниз и учитывает защиту врага. Отражение не вызывает вампиризм.',
-      baseCost: 65, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.10, maxLevel: 5,
+      baseCost: 65, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.10,
       format: val => `${(val * 100).toFixed(0)}%`
     },
     lifeSteal: {
       id: 'lifeSteal', category: 'defense', name: 'Вампиризм', icon: '♥',
       description: 'Лечит от реально снятого пулями HP, без избыточного урона при добивании. Лимит лечения — 1.5% максимального HP в секунду, запас до одной секунды.',
-      baseCost: 85, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.01, maxLevel: 5,
+      baseCost: 85, costMultiplier: 1.55, baseValue: 0, valuePerLevel: 0.01,
       format: val => `${(val * 100).toFixed(2)}%`
     },
     knockbackChance: {
       id: 'knockbackChance', category: 'defense', name: 'Шанс отталкивания', icon: '⇢',
-      description: 'Попадание пули может оттолкнуть живого врага от ядра. Один враг отталкивается не чаще раза в 1.25 с. Щиты босса неподвижны.',
-      baseCost: 60, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.015, maxLevel: 16,
+      description: 'Попадание пули может оттолкнуть живого врага от ядра. Один враг отталкивается не чаще раза в 1.25 с.',
+      baseCost: 60, costMultiplier: 1.30, baseValue: 0, valuePerLevel: 0.015,
       format: val => `${(val * 100).toFixed(1)}%`
     },
     knockbackPower: {
       id: 'knockbackPower', category: 'defense', name: 'Мощность отталкивания', icon: '⇢',
       description: 'Дистанция отталкивания лёгкого врага. Тяжёлых врагов отбрасывает слабее, босса — на 15% этой дистанции.',
-      baseCost: 55, costMultiplier: 1.35, baseValue: 30, valuePerLevel: 5, maxLevel: 10,
+      baseCost: 55, costMultiplier: 1.35, baseValue: 30, valuePerLevel: 5,
       requires: { id: 'knockbackChance', minLevel: 1 }, format: val => `${val.toFixed(0)} px`
     },
 
@@ -425,7 +483,7 @@ export const GameConfig = {
     killCashBonus: {
       id: 'killCashBonus',
       category: 'utility',
-      name: 'Бонус кредитов за убийство',
+      name: 'Бонус кредитов за уничтожение',
       description: 'Увеличивает количество кредитов за каждого уничтоженного врага.',
       icon: '🪙',
       baseCost: 40,
@@ -444,25 +502,37 @@ export const GameConfig = {
       valuePerLevel: 0.15, // +15% wave multiplier
       format: (val) => `+${((val - 1.0) * 100).toFixed(0)}%`
     },
+    crystalDropChance: {
+      id: 'crystalDropChance', category: 'utility', name: 'Шанс микрочипа за уничтожение', icon: 'chip',
+      description: 'Шанс получить 1 микрочип при уничтожении врага. Микрочипы за бой начисляются в постоянный кошелёк после победы или поражения.',
+      baseCost: 75, costMultiplier: 1.25, baseValue: 0.01, valuePerLevel: 0.002,
+      format: val => `${(val * 100).toFixed(1)}%`
+    },
+    crystalWaveBonus: {
+      id: 'crystalWaveBonus', category: 'utility', name: 'Бонус микрочипов за волну', icon: 'chip',
+      description: 'Увеличивает награду микрочипов за завершённую волну на 20% за уровень. Не влияет на дроп с врагов. Выплата после победы или поражения.',
+      baseCost: 80, costMultiplier: 1.28, baseValue: 1, valuePerLevel: 0.20,
+      format: val => `+${((val - 1) * 100).toFixed(0)}%`
+    },
     freeAttackChance: {
       id: 'freeAttackChance', category: 'utility', name: 'Бесплатное улучшение атаки', icon: '+',
       valueSuffix: ' шанс за волну',
       description: 'В конце каждой волны независимый шанс бесплатно повысить случайное открытое улучшение атаки на один уровень.',
-      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03, maxLevel: 8,
+      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03,
       format: val => `${(val * 100).toFixed(0)}%`
     },
     freeDefenseChance: {
       id: 'freeDefenseChance', category: 'utility', name: 'Бесплатное улучшение защиты', icon: '+',
       valueSuffix: ' шанс за волну',
       description: 'В конце каждой волны независимый шанс бесплатно повысить случайное открытое улучшение защиты на один уровень.',
-      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03, maxLevel: 8,
+      baseCost: 85, costMultiplier: 1.35, baseValue: 0, valuePerLevel: 0.03,
       format: val => `${(val * 100).toFixed(0)}%`
     },
     freeEconomyChance: {
       id: 'freeEconomyChance', category: 'utility', name: 'Бесплатное улучшение экономики', icon: '+',
       valueSuffix: ' шанс за волну',
       description: 'В конце каждой волны шанс бесплатно повысить одно улучшение экономики, включая эти шансы. Не запускает дополнительные броски в той же волне.',
-      baseCost: 110, costMultiplier: 1.40, baseValue: 0, valuePerLevel: 0.02, maxLevel: 10,
+      baseCost: 110, costMultiplier: 1.40, baseValue: 0, valuePerLevel: 0.02,
       format: val => `${(val * 100).toFixed(0)}%`
     }
   }

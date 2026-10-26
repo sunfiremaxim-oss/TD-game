@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка производительности превью башни</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #050711; color: #afc9d6; font: 14px system-ui; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 20px; }
+  button, select { color: #b5e8e8; background: #142536; border: 1px solid #36576c; padding: 8px; border-radius: 4px; }
+  #preview { display: block; margin: auto; width: min(900px, 94vw, calc(100dvh - 140px)); height: min(900px, 94vw, calc(100dvh - 140px)); }
+  #results { display: block; text-align: center; padding: 14px; font-variant-numeric: tabular-nums; }
+</style>
+<header><strong>Изолированное превью башни</strong>
+  <select id="mode"><option value="live">До: прямая отрисовка</option><option value="cached" selected>После: готовые слои</option></select>
+  <button id="benchmark">Сравнить по 160 кадров</button><span id="status">Готово</span>
+</header>
+<canvas id="preview"></canvas><output id="results">Время JS не включает асинхронную работу GPU; FPS учитывает интервалы кадров.</output>
+<script type="module">
+  import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.52';
+  import { World } from '../../src/core/World.js';
+  import { TowerComponent } from '../../src/components/TowerComponent.js';
+  import { RenderComponent } from '../../src/components/RenderComponent.js';
+  import { HealthComponent } from '../../src/components/HealthComponent.js';
+  const preview = document.querySelector('#preview');
+  const mode = document.querySelector('#mode');
+  const button = document.querySelector('#benchmark');
+  const status = document.querySelector('#status');
+  const output = document.querySelector('#results');
+  const renderer = new RenderSystem(document.createElement('canvas'), null, preview);
+  renderer.canvas.pixelRatio = devicePixelRatio || 1;
+  const world = new World();
+  const tower = world.createEntity();
+  const render = new RenderComponent('tower', 8, 26, '#00f3ff', '#00f3ff', 12);
+  const health = new HealthComponent(300, 300);
+  for (const component of [new TowerComponent(), render, health]) world.addComponent(tower, component);
+
+  // Reference path from the original menu preview. Shared game geometry keeps
+  // the comparison about caching rather than different artwork or animations.
+  function drawLive() {
+    const width = preview.clientWidth, height = preview.clientHeight;
+    const ratio = Math.min(devicePixelRatio || 1, 1.5);
+    if (preview.width !== Math.round(width * ratio)) preview.width = Math.round(width * ratio);
+    if (preview.height !== Math.round(height * ratio)) preview.height = Math.round(height * ratio);
+    const ctx = renderer.menuCtx;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    const scale = Math.min(width, height) / 340;
+    ctx.save(); ctx.translate(width / 2, height / 2); ctx.scale(scale, scale);
+    renderer._drawTowerGrid(ctx, 0, 0, 130);
+    renderer._drawRangeField(ctx, 0, 0, 130);
+    ctx.scale(2.5, 2.5);
+    renderer._drawTowerBody(ctx, render, health, 0, 0, -0.5 + Math.sin(renderer.spaceTime * 0.22) * 0.55);
+    ctx.restore();
+  }
+  let run = null, previous = null;
+  const results = [];
+  button.onclick = () => {
+    results.length = 0;
+    mode.value = 'live'; mode.disabled = button.disabled = true;
+    run = { warmup: 25, samples: [], cpu: [] };
+    status.textContent = 'Измерение: до';
+  };
+  function frame(time) {
+    renderer.spaceTime = time / 1000;
+    renderer.corePulseAngle = renderer.spaceTime * 2.5;
+    renderer.radarRotation = renderer.spaceTime * 0.6;
+    const start = performance.now();
+    if (mode.value === 'live') drawLive(); else renderer._drawMenuCore(world);
+    const cpu = performance.now() - start;
+    if (run) {
+      if (run.warmup > 0) run.warmup--;
+      else if (previous !== null) { run.samples.push(time - previous); run.cpu.push(cpu); }
+      if (run.samples.length === 160) {
+        const mean = values => values.reduce((a, b) => a + b, 0) / values.length;
+        results.push(`${mode.value === 'live' ? 'До' : 'После'}: ${(1000 / mean(run.samples)).toFixed(1)} FPS, JS ${mean(run.cpu).toFixed(3)} мс`);
+        output.textContent = results.join(' · ');
+        if (mode.value === 'live') {
+          mode.value = 'cached'; run = { warmup: 25, samples: [], cpu: [] };
+          status.textContent = 'Измерение: после';
+        } else { run = null; mode.disabled = button.disabled = false; status.textContent = 'Сравнение завершено'; }
+      }
+    }
+    previous = time;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</html>

@@ -1,0 +1,40 @@
+<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка кэша космоса</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050711;color:#aecad7;font:14px system-ui}header{padding:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}select,button{background:#142536;color:#b9e8ec;border:1px solid #34576b;padding:8px}canvas{display:block;width:100%;height:calc(100dvh - 110px)}output{display:block;padding:10px;font-size:12px}
+</style>
+<header><strong>Космос: одинаковая сцена до и после</strong><select id="mode"><option value="live">Прямой рендер</option><option value="cached" selected>Кэш</option></select><select id="scene"><option value="all">Весь космос</option><option value="nebulae">Только туманности</option></select><label>Время, с <input id="time" type="number" min="0" step="10" value="0" style="width:65px"></label><button id="pause">Остановить</button><button id="compare">Сравнить кадр</button></header>
+<canvas id="preview"></canvas><output id="result">Прямой рендер и кэш используют одинаковые цвета и движение.</output>
+<script type="module">
+import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.56';
+const canvas=document.querySelector('#preview'),mode=document.querySelector('#mode'),pause=document.querySelector('#pause'),result=document.querySelector('#result');
+const random=Math.random;let seed=5932;
+Math.random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296};
+const renderer=new RenderSystem(canvas,null);Math.random=random;
+const cache=renderer.spaceVisualCache;
+const originalSpace=Object.fromEntries(['distantStars','midStars','constellations','foregroundMotes'].map(key=>[key,renderer[key]]));
+document.querySelector('#scene').onchange=event=>{Object.assign(renderer,originalSpace);if(event.target.value==='nebulae')for(const key of Object.keys(originalSpace))renderer[key]=[]};
+document.querySelector('#time').oninput=event=>{const time=Number(event.target.value)||0;renderer.spaceTime=time;renderer.parallaxDriftX=time*8;renderer.parallaxDriftY=time*4};
+let width,height,scale,paused=false,previous;
+function resize(){width=canvas.clientWidth;height=canvas.clientHeight;scale=Math.min(1,width/640,height/640);canvas.pixelRatio=Math.min(devicePixelRatio||1,1.5);canvas.width=Math.round(width*canvas.pixelRatio);canvas.height=Math.round(height*canvas.pixelRatio)}
+window.addEventListener('resize',resize);resize();
+pause.onclick=()=>{paused=!paused;pause.textContent=paused?'Продолжить':'Остановить'};
+document.querySelector('#compare').onclick=()=>{
+ const frames=[];
+ for(const cached of [false,true]){
+  renderer.spaceVisualCache=cached?cache:null;
+  renderer.ctx.setTransform(canvas.pixelRatio,0,0,canvas.pixelRatio,0,0);
+  renderer._drawSpaceBackground(renderer.ctx,width,height,{renderScale:scale});
+  frames.push(renderer.ctx.getImageData(0,0,canvas.width,canvas.height).data);
+ }
+ let total=0,changed=0,max=0;
+ for(let i=0;i<frames[0].length;i+=4){let delta=0;for(let c=0;c<3;c++){const d=Math.abs(frames[0][i+c]-frames[1][i+c]);total+=d;delta=Math.max(delta,d);max=Math.max(max,d)}if(delta>10)changed++}
+ result.textContent=`Средняя разница RGB: ${(total/(canvas.width*canvas.height*3)).toFixed(3)} / 255; пикселей с разницей >10: ${(changed/(canvas.width*canvas.height)*100).toFixed(3)}%; максимум: ${max}.`;
+};
+function frame(time){const dt=paused||previous===undefined?0:Math.min(.05,(time-previous)/1000);previous=time;
+ renderer.spaceTime+=dt;renderer.parallaxDriftX+=dt*8;renderer.parallaxDriftY+=dt*4;
+ renderer.spaceVisualCache=mode.value==='cached'?cache:null;
+ renderer.ctx.setTransform(canvas.pixelRatio,0,0,canvas.pixelRatio,0,0);
+ renderer._drawSpaceBackground(renderer.ctx,width,height,{renderScale:scale});requestAnimationFrame(frame);
+}requestAnimationFrame(frame);
+</script></html>

@@ -1,3 +1,4 @@
+import { ALL_UPGRADE_TIERS } from '../src/config/UpgradeTiers.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from '../src/core/World.js';
@@ -39,7 +40,7 @@ function setup() {
     new EconomyComponent(10000), new TargetComponent(), new TransformComponent(),
     new CircleColliderComponent(26, 1000, true));
   world.registerSystem(new EconomySystem());
-  const manager = new UpgradeManager();
+  const manager = new UpgradeManager({}, ALL_UPGRADE_TIERS);
   manager.init(world);
   manager.applyAll(world, tower);
   const damage = new DamageSystem();
@@ -81,19 +82,20 @@ test('new skills start inactive, secondary upgrades require their matching chanc
   assert.equal(defense.knockbackPower, 35);
 });
 
-test('all capped new skills stay bounded, including next values at maximum level', () => {
-  const { world, manager } = setup();
-  for (const def of Object.values(GameConfig.upgrades).filter(def => def.baseValue !== undefined && def.maxLevel)) {
-    manager.levels.set(def.id, def.maxLevel);
-    assert.equal(manager.getNextValue(def.id), manager.getCurrentValue(def.id));
-    assert.equal(manager.getCost(def.id), Infinity);
-    assert.equal(manager.buyUpgrade(def.id, world), false);
+test('all upgrades remain available beyond their old level limits and keep their existing stat formulas', () => {
+  const { world, tower, manager } = setup();
+  world.getComponent(tower, EconomyComponent).credits = 1e35;
+  for (const def of Object.values(GameConfig.upgrades)) {
+    assert.equal(def.maxLevel, undefined);
+    manager.levels.set(def.id, 100);
   }
-  assert.equal(manager.getCurrentValue('ricochetChance'), 0.25);
-  assert.equal(manager.getCurrentValue('ricochetCount'), 4);
-  assert.equal(manager.getCurrentValue('damageReflection'), 0.5);
-  assert.equal(manager.getCurrentValue('lifeSteal'), 0.05);
-  assert.equal(manager.getCurrentValue('knockbackPower'), 80);
+  for (const def of Object.values(GameConfig.upgrades)) {
+    const before = manager.getCurrentValue(def.id);
+    assert.ok(manager.getNextValue(def.id) > before, def.id);
+    assert.ok(Number.isFinite(manager.getCost(def.id)), def.id);
+    assert.equal(manager.buyUpgrade(def.id, world), true, def.id);
+    assert.equal(manager.getLevel(def.id), 101);
+  }
 });
 
 test('rapid fire advances cooldown exactly x1.5, never refreshes while active, pauses, and can restart without recovery', () => {
@@ -451,22 +453,22 @@ test('free upgrades roll at most once per completed wave/category, charge nothin
   forceRandom(() => world.eventBus.emit('WAVE_COMPLETED', { wave: 1 }));
   assert.equal(grants.length, 3);
   assert.deepEqual(grants.map(grant => grant.category), ['offense', 'defense', 'utility']);
-  assert.equal(world.getComponent(tower, EconomyComponent).credits, before + 75);
+  assert.equal(world.getComponent(tower, EconomyComponent).credits, before + 15);
   assert.equal(manager.getLevel('damage'), 1);
-  assert.equal(manager.getCost('damage'), 31);
+  assert.equal(manager.getCost('damage'), 6);
   assert.deepEqual(manager.rollFreeUpgrades(world, 1), []);
 });
 
-test('free upgrade candidates exclude locked dependents and maxed skills', () => {
+test('free upgrades exclude locked dependents but include skills beyond their former maximum', () => {
   const { world, manager } = setup();
   manager.levels.set('freeAttackChance', 8);
-  manager.levels.set('critChance', GameConfig.upgrades.critChance.maxLevel);
+  manager.levels.set('critChance', 100);
   let roll = 0;
   const grants = forceRandom(() => manager.rollFreeUpgrades(world, 1), () => roll++ === 0 ? 0 : 0.999);
   assert.equal(grants.length, 1);
   assert.equal(grants[0].upgradeId, 'rapidFireChance');
   assert.equal(manager.getLevel('rapidFireDuration'), 0);
-  assert.equal(manager.getLevel('critChance'), GameConfig.upgrades.critChance.maxLevel);
+  assert.equal(manager.getLevel('critChance'), 100);
 });
 
 test('economy can upgrade its own chance once, without recursively awarding or opening additional rolls', () => {
@@ -518,7 +520,7 @@ test('failed chance rolls produce no rapid fire, ricochet, knockback or free lev
 
 test('full combat pipeline with all new abilities survives a seeded multiwave stress run without event errors', () => {
   const world = new World();
-  const manager = new UpgradeManager();
+  const manager = new UpgradeManager({}, ALL_UPGRADE_TIERS);
   // Exercise free-upgrade callbacks deterministically; combat RNG remains seeded.
   const rollFreeUpgrades = manager.rollFreeUpgrades.bind(manager);
   manager.rollFreeUpgrades = (...args) => forceRandom(() => rollFreeUpgrades(...args));

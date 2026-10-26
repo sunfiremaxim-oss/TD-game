@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка щитов Эгиды</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100dvh; display: flex; flex-direction: column; background: #050711; color: #a4c8d2; font: 14px system-ui; }
+  header { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 16px; }
+  label { display: flex; align-items: center; gap: 8px; }
+  select, button { color: #b6f1dd; background: #0c1d29; border: 1px solid #31535d; border-radius: 5px; padding: 7px; }
+  p { margin: 0; font-size: 12px; color: #7892a6; }
+  canvas { display: block; flex: 1; width: 100%; height: 0; min-height: 0; }
+  footer { flex: none; padding: 8px 16px; font-size: 12px; color: #7892a6; }
+</style>
+<header>
+  <label>Проверка щитов <select id="shield-count"><option value="0">Без Эгид</option><option value="1" selected>Одна Эгида</option><option value="4">Четыре Эгиды</option></select></label>
+  <button id="pause">Остановить пульсацию</button>
+  <p>Изолированная сцена настоящего рендера игры</p>
+</header>
+<canvas id="preview"></canvas>
+<footer>Щиты используют игровой радиус. Сцена проверяет визуал и перекрытие, без боевой симуляции.</footer>
+<script type="module">
+  import { World } from '../../src/core/World.js';
+  import { GameConfig } from '../../src/config/GameConfig.js';
+  import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.45';
+  import { TowerComponent } from '../../src/components/TowerComponent.js';
+  import { EnemyComponent } from '../../src/components/EnemyComponent.js';
+  import { TransformComponent } from '../../src/components/TransformComponent.js';
+  import { HealthComponent } from '../../src/components/HealthComponent.js';
+  import { AttackComponent } from '../../src/components/AttackComponent.js';
+  import { RenderComponent } from '../../src/components/RenderComponent.js';
+  const canvas = document.querySelector('#preview');
+  const renderer = new RenderSystem(canvas, null);
+  let world, paused = false, previous;
+  function add(...components) {
+    const id = world.createEntity();
+    for (const component of components) world.addComponent(id, component);
+  }
+  function resize() {
+    const { width, height } = canvas.getBoundingClientRect();
+    const pixelRatio = Math.min(devicePixelRatio || 1, 2, Math.sqrt(1500000 / (width * height)));
+    canvas.width = Math.round(width * pixelRatio); canvas.height = Math.round(height * pixelRatio);
+    Object.assign(canvas, { viewportWidth: width, viewportHeight: height, pixelRatio });
+    world = new World();
+    world.renderScale = Math.min(1, width / 640, height / 640);
+    world.width = width / world.renderScale; world.height = height / world.renderScale;
+    const cx = world.width / 2, cy = world.height / 2;
+    add(new TowerComponent(), new TransformComponent(cx, cy, -0.5), new HealthComponent(300, 300),
+      new AttackComponent(25, 1.6, GameConfig.tower.baseRange), new RenderComponent('tower', 8, 26));
+    const count = Number(document.querySelector('#shield-count').value);
+    for (let i = 0; i < count; i++) {
+      const angle = -Math.PI / 4 + i * Math.PI / 2;
+      const x = cx + Math.cos(angle) * 140, y = cy + Math.sin(angle) * 140;
+      const config = GameConfig.enemies.aegis;
+      const enemy = new EnemyComponent('aegis'); enemy.shieldDomeRadius = config.shieldDomeRadius;
+      enemy.rotationSpeed = i % 2 === 0 ? 0.5 : -0.5;
+      add(enemy, new TransformComponent(x, y, -Math.PI / 2), new HealthComponent(100, 100),
+        new RenderComponent('polygon', 5, config.radius, config.color, config.color, 8));
+      for (const [dx, dy] of [[-42, 30], [38, 42], [-10, -50]]) {
+        add(new EnemyComponent('scout'), new TransformComponent(x + dx, y + dy), new HealthComponent(17, 17),
+          new RenderComponent('polygon', 3, 12, '#ffe600', '#ffe600', 5));
+      }
+      if (count === 1) {
+        // Matching scouts outside the field provide a direct brightness comparison.
+        for (const [dx, dy] of [[145, 0], [-145, -70]]) {
+          add(new EnemyComponent('scout'), new TransformComponent(x + dx, y + dy), new HealthComponent(17, 17),
+            new RenderComponent('polygon', 3, 12, '#ffe600', '#ffe600', 5));
+        }
+      }
+    }
+  }
+  document.querySelector('#shield-count').addEventListener('change', resize);
+  document.querySelector('#pause').addEventListener('click', event => {
+    paused = !paused; event.target.textContent = paused ? 'Продолжить пульсацию' : 'Остановить пульсацию';
+  });
+  window.addEventListener('resize', resize);
+  resize();
+  function frame(time) {
+    const delta = paused || previous === undefined ? 0 : Math.min(0.05, (time - previous) / 1000);
+    for (const id of world.getEntitiesWith(EnemyComponent, TransformComponent)) {
+      const enemy = world.getComponent(id, EnemyComponent);
+      if (enemy.type === 'aegis') world.getComponent(id, TransformComponent).rotation += enemy.rotationSpeed * delta;
+    }
+    renderer.update(world, delta);
+    previous = time;
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+</script>
+</html>

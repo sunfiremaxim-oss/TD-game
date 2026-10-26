@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Проверка постоянной прокачки</title>
+<style>body { background: #070e19; color: #b7d3e7; font: 18px system-ui; padding: 24px; } button { padding: 16px; }</style>
+<h1>Проверка постоянной прокачки</h1>
+<p>Отдельный тестовый кошелёк на 127.0.0.2. Основные сохранения localhost и 127.0.0.1 не меняются.</p>
+<button id="seed" disabled>Добавить 10 000 тестовых микрочипов и открыть игру</button>
+<script type="module">
+  import { PlayerProgress } from '../../src/managers/PlayerProgress.js';
+  const button = document.getElementById('seed');
+  button.disabled = location.hostname !== '127.0.0.2';
+  button.addEventListener('click', () => {
+    new PlayerProgress().credit(10000);
+    location.href = '/';
+  });
+</script>
+</html>

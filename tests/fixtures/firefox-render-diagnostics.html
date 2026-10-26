@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Диагностика Canvas: Firefox и Edge</title>
+<style>
+  * { box-sizing: border-box; }
+  html { overflow-y: scroll; }
+  body { margin: 0; background: #050711; color: #b4cdd7; font: 14px system-ui; }
+  header { padding: 12px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  button { background: #142536; color: #b9e8ec; border: 1px solid #34576b; padding: 9px; cursor: pointer; }
+  #stage { height: min(65dvh, 900px); position: relative; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #report { margin: 0; padding: 12px; white-space: pre-wrap; font: 12px/1.5 monospace; }
+  p { margin: 0; }
+</style>
+<header>
+  <strong>Диагностика Canvas</strong>
+  <button id="run">Запустить сравнение (~25 секунд)</button>
+  <span id="status">Готово</span>
+  <p>Оставьте вкладку активной. Тест изолирует рендер, без звука и боевой симуляции.</p>
+</header>
+<div id="stage"></div>
+<pre id="report"></pre>
+<script type="module">
+  import { RenderSystem } from '../../src/systems/RenderSystem.js?v=2.56';
+  import { World } from '../../src/core/World.js';
+  import { GameConfig } from '../../src/config/GameConfig.js';
+  import { TowerComponent } from '../../src/components/TowerComponent.js';
+  import { TransformComponent } from '../../src/components/TransformComponent.js';
+  import { RenderComponent } from '../../src/components/RenderComponent.js';
+  import { HealthComponent } from '../../src/components/HealthComponent.js';
+  import { AttackComponent } from '../../src/components/AttackComponent.js';
+  import { EnemyComponent } from '../../src/components/EnemyComponent.js';
+
+  const stage = document.querySelector('#stage'), button = document.querySelector('#run');
+  const status = document.querySelector('#status'), report = document.querySelector('#report');
+  const scenes = [
+    ['raf', 'Только requestAnimationFrame'], ['fill', 'Только заливка'],
+    ['stars', 'Звёзды и частицы'], ['nebulaeLive', 'Туманности: прямой рендер'], ['nebulae', 'Туманности: кэш'],
+    ['space', 'Весь космос'], ['tower', 'Башня и дальность'],
+    ['battle', 'Космос + башня + 9 врагов']
+  ];
+  let canvas, renderer, world, originalSpace, width, height, ratio, run = null, rows = [], settings;
+  function setup(alpha) {
+    canvas = document.createElement('canvas'); stage.replaceChildren(canvas);
+    width = canvas.clientWidth; height = canvas.clientHeight;
+    ratio = Math.max(1, Math.min(devicePixelRatio || 1, 2, Math.sqrt(1500000 / (width * height))));
+    Object.assign(canvas, { width: Math.round(width * ratio), height: Math.round(height * ratio),
+      viewportWidth: width, viewportHeight: height, pixelRatio: ratio });
+    // Establish the context before the renderer obtains it: later getContext
+    // calls cannot change alpha on an already-created context.
+    const ctx = canvas.getContext('2d', { alpha });
+    const random = Math.random; let seed = 4123;
+    Math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+    try { renderer = new RenderSystem(canvas, null); } finally { Math.random = random; }
+    originalSpace = Object.fromEntries(['distantStars', 'midStars', 'constellations', 'foregroundMotes', 'nebulae'].map(key => [key, renderer[key]]));
+    world = new World(); world.renderScale = Math.min(1, width / 640, height / 640);
+    world.width = width / world.renderScale; world.height = height / world.renderScale;
+    const add = (...components) => { const id = world.createEntity(); for (const c of components) world.addComponent(id, c); };
+    add(new TowerComponent(), new TransformComponent(world.width / 2, world.height / 2, -.5),
+      new RenderComponent('tower', 8, 26, '#00f3ff', '#00f3ff', 14), new HealthComponent(300, 300), new AttackComponent(25, 1.6, 130));
+    const cfg = GameConfig.enemies.scout;
+    for (let i = 0; i < 9; i++) {
+      const angle = i * Math.PI * 2 / 9;
+      add(new EnemyComponent('scout'), new TransformComponent(world.width / 2 + Math.cos(angle) * 240,
+        world.height / 2 + Math.sin(angle) * 240, angle),
+        new RenderComponent('polygon', cfg.sides, cfg.radius, cfg.color, cfg.glowColor, cfg.glowBlur), new HealthComponent(cfg.baseHp, cfg.baseHp));
+    }
+    settings = { viewport: `${width}×${height}`, buffer: `${canvas.width}×${canvas.height}`,
+      dpr: devicePixelRatio || 1, ratio, attributes: ctx.getContextAttributes?.() };
+    ctx.fillStyle = '#050711'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  function configureScene(key) {
+    Object.assign(renderer, originalSpace);
+    if (key === 'stars') renderer.nebulae = [];
+    renderer.spaceVisualCache.nebulaeEnabled = key !== 'nebulaeLive';
+    if (key.startsWith('nebulae')) for (const name of ['distantStars', 'midStars', 'constellations', 'foregroundMotes']) renderer[name] = [];
+  }
+  function draw(key, time) {
+    const ctx = renderer.ctx;
+    renderer.spaceTime = time / 1000; renderer.parallaxDriftX = time / 1000 * 8;
+    renderer.parallaxDriftY = time / 1000 * 4; renderer.radarRotation = time / 1000 * .6; renderer.corePulseAngle = time / 1000 * 2.5;
+    if (key === 'raf') return;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    if (['stars', 'nebulaeLive', 'nebulae', 'space', 'battle'].includes(key)) renderer._drawSpaceBackground(ctx, width, height, world);
+    else { ctx.fillStyle = '#050711'; ctx.fillRect(0, 0, width, height); }
+    if (key === 'tower' || key === 'battle') {
+      ctx.save(); ctx.scale(world.renderScale, world.renderScale);
+      renderer._drawTowerAndRange(ctx, world);
+      if (key === 'battle') renderer._drawEnemies(ctx, world);
+      ctx.restore();
+    }
+  }
+  function output() {
+    const heading = `UA: ${navigator.userAgent}\n${JSON.stringify(settings)}\n\n`;
+    report.textContent = heading + 'Прозрачность | Сцена | FPS | p95 интервал, мс | JS, мс\n' + rows.map(row =>
+      `${row.alpha ? 'alpha=true ' : 'alpha=false'} | ${row.scene} | ${row.fps.toFixed(1)} | ${row.p95.toFixed(2)} | ${row.cpu.toFixed(3)}`).join('\n');
+  }
+  button.onclick = () => {
+    rows = []; setup(true); configureScene('raf');
+    run = { index: 0, alpha: true, start: null, previous: null, dt: [], cpu: [] };
+    button.disabled = true; output(); status.textContent = 'Измерение…';
+  };
+  // An interrupted sample is invalid, rather than a misleading background FPS.
+  function cancel(reason) { if (!run) return; run = null; button.disabled = false; status.textContent = reason; }
+  document.addEventListener('visibilitychange', () => { if (document.hidden) cancel('Прервано: вкладка скрыта. Запустите заново.'); });
+  window.addEventListener('resize', () => cancel('Прервано: размер изменился. Запустите заново.'));
+  function frame(time) {
+    if (run) {
+      const current = run, key = scenes[current.index][0];
+      if (current.start === null) {
+        current.start = time;
+        status.textContent = `${current.alpha ? 'alpha=true' : 'alpha=false'} · ${scenes[current.index][1]}`;
+      }
+      const start = performance.now(); draw(key, time); const cpu = performance.now() - start;
+      const elapsed = time - current.start;
+      if (elapsed >= 400 && current.previous !== null) { current.dt.push(time - current.previous); current.cpu.push(cpu); }
+      current.previous = time;
+      if (elapsed >= 1600 && current.dt.length) {
+        const mean = a => a.reduce((s, n) => s + n, 0) / a.length;
+        const ordered = [...current.dt].sort((a, b) => a - b);
+        rows.push({ alpha: current.alpha, scene: scenes[current.index][1], fps: 1000 / mean(current.dt),
+          p95: ordered[Math.ceil(ordered.length * .95) - 1], cpu: mean(current.cpu) });
+        output();
+        if (++current.index === scenes.length) {
+          if (current.alpha) { current.alpha = false; current.index = 0; setup(false); }
+          else { run = null; button.disabled = false; status.textContent = 'Готово. Скопируйте результат ниже.'; }
+        }
+        if (run) { configureScene(scenes[current.index][0]); current.start = current.previous = null; current.dt = []; current.cpu = []; }
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  setup(true); output(); requestAnimationFrame(frame);
+</script>
+</html>

@@ -25,9 +25,10 @@
   --text-dim: #94a3b8;
   --text-cyan: #00f3ff;
   
-  --font-cyber: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
-  --font-ui: 'Rajdhani', 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'Consolas', 'Courier New', monospace;
+  --font-title: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  --font-cyber: 'WDXL Lubrifont SC', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'WDXL Lubrifont SC', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'WDXL Lubrifont SC', 'Consolas', monospace;
 }
 
 html, body {
@@ -45,6 +46,7 @@ html, body {
   background-color: var(--bg-main);
   color: var(--text-main);
   font-family: var(--font-ui);
+  font-synthesis: none;
   display: flex;
   flex-direction: column;
   -webkit-font-smoothing: antialiased;
@@ -910,7 +912,7 @@ html, body {
 }
 
 .menu-title {
-  font-family: var(--font-cyber);
+  font-family: var(--font-title);
   font-size: 46px;
   font-weight: 900;
   letter-spacing: 6px;
@@ -1232,13 +1234,13 @@ html, body {
 }
 
 .intel-card.boss-card {
-  border-color: rgba(255, 0, 170, 0.45);
+  border-color: rgba(255, 113, 137, 0.45);
   background: #141022;
 }
 
 .intel-card.boss-card:hover {
-  border-color: #ff00aa;
-  box-shadow: 0 0 24px rgba(255, 0, 170, 0.4);
+  border-color: #ff7189;
+  box-shadow: 0 0 24px rgba(255, 113, 137, 0.4);
 }
 
 .intel-icon-box {
@@ -1269,7 +1271,7 @@ html, body {
 .aegis-box { border-color: #00e5ff; box-shadow: inset 0 0 10px rgba(0, 229, 255, 0.2), 0 0 8px rgba(0, 229, 255, 0.25); }
 .splitter-box { border-color: #00ff66; box-shadow: inset 0 0 10px rgba(0, 255, 102, 0.2), 0 0 8px rgba(0, 255, 102, 0.25); }
 .blinker-box { border-color: #00ffff; box-shadow: inset 0 0 10px rgba(0, 255, 255, 0.2), 0 0 8px rgba(0, 255, 255, 0.25); }
-.architect-box { border-color: #ff00aa; box-shadow: inset 0 0 14px rgba(255, 0, 170, 0.25), 0 0 12px rgba(255, 0, 170, 0.35); }
+.architect-box { border-color: #ff7189; box-shadow: inset 0 0 14px rgba(255, 113, 137, 0.25), 0 0 12px rgba(255, 113, 137, 0.35); }
 
 .intel-info {
   display: flex;
@@ -1298,7 +1300,7 @@ html, body {
 .aegis-color { color: #00e5ff; text-shadow: 0 0 8px rgba(0, 229, 255, 0.4); }
 .splitter-color { color: #00ff66; text-shadow: 0 0 8px rgba(0, 255, 102, 0.4); }
 .blinker-color { color: #ffffff; text-shadow: 0 0 8px rgba(0, 255, 255, 0.5); }
-.architect-color { color: #ff00aa; text-shadow: 0 0 10px rgba(255, 0, 170, 0.5); }
+.architect-color { color: #ff7189; text-shadow: 0 0 10px rgba(255, 113, 137, 0.5); }
 
 .intel-badge {
   font-family: var(--font-cyber);
@@ -1317,7 +1319,7 @@ html, body {
 .aegis-badge { border-color: rgba(0, 229, 255, 0.4); color: #00e5ff; background: rgba(0, 229, 255, 0.08); }
 .splitter-badge { border-color: rgba(0, 255, 102, 0.4); color: #00ff66; background: rgba(0, 255, 102, 0.08); }
 .blinker-badge { border-color: rgba(0, 255, 255, 0.4); color: #00ffff; background: rgba(0, 255, 255, 0.08); }
-.architect-badge { border-color: rgba(255, 0, 170, 0.4); color: #ff00aa; background: rgba(255, 0, 170, 0.08); }
+.architect-badge { border-color: rgba(255, 113, 137, 0.4); color: #ff7189; background: rgba(255, 113, 137, 0.08); }
 
 .intel-desc {
   font-family: var(--font-ui);
@@ -1723,3 +1725,7 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--neon-cyan)
   .pulse-dot, #intermission-text { animation: none; }
   button, .upgrade-card { transition: none; }
 }
+
+.carrier-box { border-color: #ff4d8b; box-shadow: 0 0 12px #ff005533; }
+.carrier-color { color: #ff80af; }
+.carrier-badge { color: #ff9dbf; border-color: #ff4d8b66; background: #ff00551a; }

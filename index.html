@@ -6,66 +6,253 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>Geometric Neon Cyberpunk - Tower Defense ECS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/battle.css?v=2.36">
+  <link rel="preload" href="fonts/wdxl-lubrifont-sc-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/wdxl-lubrifont-sc-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/fonts.css?v=3.04">
+  <link rel="stylesheet" href="css/style.css?v=3.04">
+  <link rel="stylesheet" href="css/battle.css?v=3.04">
+  <link rel="stylesheet" href="css/menu.css?v=3.04">
+  <link rel="stylesheet" href="css/devtools.css?v=3.04">
 </head>
 <body>
   <div id="game-app" class="in-menu battle-layout">
-    <!-- MAIN MENU OVERLAY -->
-    <div id="main-menu" class="menu-overlay">
-      <div class="menu-panel" data-scrollable>
-        <div class="menu-header">
-          <div class="menu-protocol-tag">
-            <span class="pulse-dot"></span>
-            DEFENSE PROTOCOL // STANDALONE READY
-          </div>
+    <!-- Full-screen command hub and permanent progression. -->
+    <div id="main-menu" class="menu-overlay command-menu" data-page="home">
+      <header class="command-header">
+        <div class="command-brand">
           <h1 class="menu-title">CYBER CORE</h1>
-          <div class="menu-subtitle">ГЕОМЕТРИЧЕСКИЙ TOWER DEFENSE</div>
+          <span class="command-brand-sub">ОБОРОНА ЯДРА</span>
         </div>
-
-        <div class="menu-actions">
-          <button id="btn-menu-start" class="menu-btn primary-btn">
-            <span class="btn-glow"></span>
-            <span class="btn-icon">▶</span>
-            <span class="btn-text">НАЧАТЬ ИГРУ</span>
-          </button>
-          
-          <button id="btn-menu-intel" class="menu-btn secondary-btn">
-            <span class="btn-icon">◈</span>
-            <span class="btn-text">БАЗА ДАННЫХ ВРАГОВ</span>
-          </button>
-
-          <button id="btn-menu-help" class="menu-btn secondary-btn">
-            <span class="btn-icon">ℹ</span>
-            <span class="btn-text">УПРАВЛЕНИЕ И ПРАВИЛА</span>
-          </button>
-        </div>
-
-        <!-- Audio Quick Controls inside Main Menu -->
-        <div class="menu-audio-section">
-          <div class="menu-audio-header">АУДИО СИСТЕМА:</div>
-          <div class="menu-audio-buttons">
-            <button id="menu-btn-sfx" class="menu-audio-btn" title="Громкость звуков игры">
-              <span class="audio-icon">🔊</span>
-              <span id="menu-label-sfx">ЗВУКИ: 100%</span>
-            </button>
-            <button id="menu-btn-music" class="menu-audio-btn" title="Громкость фоновой музыки">
-              <span class="audio-icon">🎵</span>
-              <span id="menu-label-music">МУЗЫКА: 100%</span>
-            </button>
+        <div class="command-header-actions">
+          <div class="meta-wallet" id="meta-wallet" title="Постоянная валюта. Микрочипы за бой зачисляются после победы или поражения." aria-label="Микрочипы: 0. Постоянная валюта.">
+            <span class="chip-icon" aria-hidden="true"></span>
+            <div><span class="meta-wallet-label">МИКРОЧИПЫ</span><strong id="meta-crystals">0</strong><small id="meta-save-status" hidden>Сохранение недоступно: только в этом сеансе</small></div>
           </div>
-        </div>
 
-        <div class="menu-footer">
-          <div class="menu-keys-hint">
-            <span>СКОРОСТЬ: <b>[1] [2] [3]</b></span>
-            <span class="dot-sep">&bull;</span>
-            <span>ПАУЗА: <b>[ПРОБЕЛ] / [P]</b></span>
-          </div>
         </div>
+      </header>
+      <nav class="command-nav" aria-label="Главное меню">
+        <span class="command-nav-caption">КОМАНДНЫЙ ЦЕНТР</span>
+        <button id="btn-menu-home" class="command-nav-btn" type="button" aria-current="page" aria-controls="menu-page-home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7Z"/><circle cx="12" cy="12" r="3"/></svg><span>Главная</span></button>
+        <button id="btn-menu-upgrades" class="command-nav-btn" type="button" aria-current="false" aria-controls="menu-page-upgrades"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M12 17V3m-6 6 6-6 6 6"/></svg><span>Улучшения</span></button>
+        <button id="btn-menu-intel" class="command-nav-btn" type="button" aria-current="false" aria-controls="modal-intel"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 9 17H3Z M12 9v5m0 2v1"/></svg><span>Противники</span></button>
+        <button id="btn-menu-settings" class="command-nav-btn" type="button" aria-label="Настройки" aria-controls="menu-page-settings" aria-current="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.5 3 1.4.8 2.9-1.1 2 3.5-2.4 1.9v1.8l2.4 1.9-2 3.5-2.9-1.1-1.4.8-.5 3h-4l-.5-3-1.4-.8-2.9 1.1-2-3.5 2.4-1.9v-1.8L3.2 8.2l2-3.5 2.9 1.1 1.4-.8Z" transform="translate(0 1)"/><circle cx="12" cy="12" r="3"/></svg>
+            <span>Настройки</span>
+          </button>
+        <div class="command-nav-foot"><span class="pulse-dot"></span> ЯДРО НА СВЯЗИ</div>
+      </nav>
+      <div id="menu-content" class="command-content">
+        <section id="menu-page-home" class="menu-page command-home" aria-label="Главная">
+          <div id="menu-home-copy" class="command-home-copy">
+            <span class="command-eyebrow">ПРОТОКОЛ ОБОРОНЫ</span>
+            <h2>Ядро готово <br>к бою.</h2>
+            <p>Сдерживайте волны роя и усиливайте башню прямо в бою.</p>
+            <button id="btn-menu-start" class="command-start" type="button"><span>НАЧАТЬ БОЙ</span><span aria-hidden="true">▶</span></button>
+            <div id="stage-selector" class="stage-selector" role="group" aria-label="Выбор уровня">
+              <button id="stage-prev" type="button" data-stage-step="-1" aria-label="Предыдущий уровень"><span aria-hidden="true">&lt;</span></button>
+              <span id="stage-info" class="stage-info" aria-live="polite"></span>
+              <button id="stage-next" type="button" data-stage-step="1" aria-label="Следующий уровень"><span aria-hidden="true">&gt;</span></button>
+            </div>
+          </div>
+          <div id="menu-home-core-slot" class="menu-core-home-slot">
+          <div id="menu-core-display" class="command-core-display">
+            <div class="command-core-label"><span class="command-eyebrow">ЦЕНТРАЛЬНОЕ ЯДРО</span><span>01 / CORE</span></div>
+            <canvas id="menu-core-canvas" width="600" height="600" aria-label="Башня с пульсирующим реактором"></canvas>
+            <div class="command-core-status"><span class="pulse-dot"></span> СИСТЕМЫ ГОТОВЫ</div>
+          </div>
+          </div>
+        </section>
+        <section id="menu-page-upgrades" class="menu-page command-upgrades hidden" data-scrollable aria-label="Постоянные улучшения">
+          <header class="command-page-heading"><span class="command-eyebrow">РАЗВИТИЕ ЯДРА</span><h2>Постоянные улучшения</h2><p>Усиления, которые останутся с вами в следующих боях.</p></header>
+          <p class="meta-upgrade-note">Открывайте тиры по порядку. Доступ действует в бою и постоянной прокачке; уровни покупаются отдельно.</p>
+          <div class="permanent-upgrade-layout">
+          <div class="permanent-upgrade-controls">
+          <nav class="meta-tabs" aria-label="Категории постоянных улучшений">
+            <button id="menu-meta-offense" type="button" aria-pressed="true">АТАКА</button><button id="menu-meta-defense" type="button" aria-pressed="false">ЗАЩИТА</button><button id="menu-meta-utility" type="button" aria-pressed="false">ЭКОНОМИКА</button>
+          </nav>
+          <div id="menu-meta-panel-offense" class="meta-card-grid"></div>
+          <div id="menu-meta-panel-defense" class="meta-card-grid hidden"></div>
+          <div id="menu-meta-panel-utility" class="meta-card-grid hidden"></div>
+          <p class="meta-footnote">Постоянные уровни сохраняются после поражения, выхода и перезапуска. Микрочипы за бой зачисляются после победы или поражения. Выход или перезапуск до завершения боя сжигает микрочипы за текущий бой. Боевые кредиты используются внутри забега.</p>
+          </div>
+          </div>
+        </section>
+        <section id="menu-page-settings" class="menu-page command-settings hidden" data-scrollable aria-label="Настройки">
+          <header class="command-page-heading"><span class="command-eyebrow">ПАРАМЕТРЫ СИСТЕМЫ</span><h2>Настройки</h2><p>Настройте игру под себя.</p></header>
+          <div class="command-settings-card"><h3>Язык</h3><button id="menu-btn-language" class="language-toggle" type="button">Русский</button></div>
+          <div class="command-settings-card"><h3>Аудио</h3><p>Нажмите на кнопку, чтобы изменить громкость.</p><div class="menu-audio-buttons">
+            <button id="menu-btn-sfx" class="menu-audio-btn" type="button" title="Громкость звуков игры"><span class="audio-icon">🔊</span><span id="menu-label-sfx">ЗВУКИ: 100%</span></button>
+            <button id="menu-btn-music" class="menu-audio-btn" type="button" title="Громкость фоновой музыки"><span class="audio-icon">🎵</span><span id="menu-label-music">МУЗЫКА: 100%</span></button>
+          </div></div>
+          <div class="command-settings-card"><h3>Производительность</h3><button id="menu-btn-fps" class="command-option-btn" type="button" aria-pressed="false"><span>Счётчик FPS</span><span id="menu-fps-state">ВЫКЛ</span></button></div>
+          <div class="command-settings-card"><h3>Как играть</h3><p>Управление, улучшения и основы обороны.</p><button id="btn-menu-help" class="command-help-btn" type="button">УПРАВЛЕНИЕ И ПРАВИЛА <span aria-hidden="true">↗</span></button></div>
+        </section>
+    <!-- Enemy database shares the full-screen menu shell. -->
+    <div id="modal-intel" class="menu-page menu-intel hidden" data-scrollable aria-label="Противники">
+      <div data-scrollable class="modal-content modal-intel-content">
+        <div class="modal-header">
+          <h2 class="modal-title cyan-title">Противники</h2>
+          <button id="btn-intel-close-x" class="modal-close-x">&times;</button>
+        </div>
+        <div class="intel-grid">
+          <!-- 1. Scout -->
+          <div class="intel-card" data-enemy-card="scout">
+            <div class="intel-icon-box scout-box">
+              <canvas class="intel-canvas" data-enemy="scout" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name scout-color">СКАУТ</span>
+                <span class="intel-badge scout-badge">ВОЛНА 1+</span>
+              </div>
+              <p class="intel-desc">Быстрый лёгкий авангард роя. Нападает группами, проверяя базовую огневую мощь башни.</p>
+              <div class="intel-tip">СОВЕТ: Высокая скорость стрельбы легко сдерживает толпу.</div>
+            </div>
+          </div>
+
+          <div class="intel-card boss-card" data-enemy-card="boss_scout" hidden>
+            <div class="intel-icon-box scout-box"><canvas class="intel-canvas" data-enemy="boss_scout" width="120" height="120"></canvas></div>
+            <div class="intel-info">
+              <div class="intel-name-row"><span class="intel-name scout-color">БОСС «ИМПУЛЬС»</span><span class="intel-badge scout-badge">ФИНАЛ СТАДИИ</span></div>
+              <p class="intel-desc">Крупный скаут с прочным треугольным корпусом. Движется прямо к башне и атакует её при касании.</p>
+              <div class="intel-tip">СОВЕТ: Урон и скорость атаки сокращают бой, а прочность и регенерация помогают выдержать его атаки.</div>
+            </div>
+          </div>
+
+          <!-- Stage-three boss: Monolith -->
+          <div class="intel-card boss-card" data-enemy-card="boss_architect" hidden>
+            <div class="intel-icon-box architect-box">
+              <canvas class="intel-canvas" data-enemy="boss_architect" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name architect-color">БОСС «МОНОЛИТ»</span>
+                <span class="intel-badge architect-badge">ФИНАЛ СТАДИИ</span>
+              </div>
+              <p class="intel-desc">Осадный босс третьего уровня. На подходе броня снижает входящий урон на 35%. Остановившись у башни, готовит буры 1.2 секунды и сверлит 4 секунды. Затем перегревается на 2.5 секунды: не атакует и получает на 50% больше урона. Цикл повторяется.</p>
+              <div class="intel-tip">СОВЕТ: Защита помогает пережить бурение, а огневая мощь — использовать окна перегрева. Голубые раскрытые секции показывают уязвимость.</div>
+            </div>
+          </div>
+          <!-- 4. Fighter -->
+          <div class="intel-card" data-enemy-card="fighter" hidden>
+            <div class="intel-icon-box fighter-box">
+              <canvas class="intel-canvas" data-enemy="fighter" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name fighter-color">ИСТРЕБИТЕЛЬ</span>
+                <span class="intel-badge fighter-badge">ШТУРМОВИК</span>
+              </div>
+              <p class="intel-desc">Манёвренный штурмовик. Приближается по спирали в случайном направлении и обходит союзников, стараясь сохранять их между собой и башней.</p>
+              <p class="intel-synergy" data-intel-stage="2" hidden>ВЗАИМОДЕЙСТВИЕ: «Дирижёр» выпускает облегчённые истребители парами. После уничтожения носителя они продолжают атаку.</p>
+              <p class="intel-synergy" data-intel-stage="3" hidden>ВЗАИМОДЕЙСТВИЕ: Ищет ближайший танк и прячется за ним, подстраивая скорость. На половине радиуса атаки башни выходит из прикрытия и ускоряется к ядру.</p>
+              <div class="intel-tip">СОВЕТ: Укрепляйте плоскую броню и уничтожайте их на дальних подступах.</div>
+            </div>
+          </div>
+
+          <!-- Stage-two carrier: revealed only after completing stage two. -->
+          <div class="intel-card boss-card" data-enemy-card="boss_carrier" hidden>
+            <div class="intel-icon-box carrier-box"><canvas class="intel-canvas" data-enemy="boss_carrier" width="120" height="120"></canvas></div>
+            <div class="intel-info">
+              <div class="intel-name-row"><span class="intel-name carrier-color">БОСС «ДИРИЖЁР»</span><span class="intel-badge carrier-badge">НОСИТЕЛЬ</span></div>
+              <p class="intel-desc">Маневрирует внутри дальности башни и обстреливает ядро. Выпускает до трёх звеньев по два облегчённых истребителя. После каждого запуска открывает реактор и получает на 40% больше урона; закрытый корпус снижает урон на 20%. После последнего запуска реактор остаётся открытым.</p>
+              <p class="intel-synergy" data-intel-stage="2" hidden>ВЗАИМОДЕЙСТВИЕ: Выпущенные истребители заходят по спиралям с двух сторон. После уничтожения носителя оставшееся звено нужно добить.</p>
+              <div class="intel-tip">СОВЕТ: Скорость атаки и мультивыстрел помогают разбирать звенья и использовать окна открытого реактора.</div>
+            </div>
+          </div>
+          <!-- 2. Tank -->
+          <div class="intel-card" data-enemy-card="tank" hidden>
+            <div class="intel-icon-box tank-box">
+              <canvas class="intel-canvas" data-enemy="tank" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name tank-color">ТАНК</span>
+                <span class="intel-badge tank-badge">ТЯЖЁЛЫЙ</span>
+              </div>
+              <p class="intel-desc">Медленный тяжёлый корабль с большим запасом HP. Движется прямо к ядру; большая масса ослабляет отталкивание.</p>
+              <p class="intel-synergy" data-intel-stage="3" hidden>ВЗАИМОДЕЙСТВИЕ: Служит прикрытием для истребителей. Они следуют за танком, а ближе к ядру переходят в ускоренную атаку.</p>
+              <div class="intel-tip">СОВЕТ: Прокачивайте урон и критические атаки, чтобы быстрее пробивать большой запас HP.</div>
+            </div>
+          </div>
+
+          <!-- 3. Sniper -->
+          <div class="intel-card" data-enemy-card="sniper" hidden>
+            <div class="intel-icon-box sniper-box">
+              <canvas class="intel-canvas" data-enemy="sniper" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name sniper-color">СНАЙПЕР</span>
+                <span class="intel-badge sniper-badge">АРТИЛЛЕРИЯ</span>
+              </div>
+              <p class="intel-desc">Дистанционный боец с небольшим запасом HP. Останавливается внутри радиуса атаки башни и после короткого прицеливания выпускает снаряды в ядро.</p>
+              <p class="intel-synergy" data-intel-stage="5" hidden>ВЗАИМОДЕЙСТВИЕ: Ищет Эгиду, входит под её купол и сопровождает её. Когда Эгида останавливается у башни, ведёт огонь из-под защиты.</p>
+              <div class="intel-tip">СОВЕТ: Увеличивайте урон и скорость атаки, чтобы уничтожать снайперов между выстрелами.</div>
+            </div>
+          </div>
+
+          <div class="intel-card boss-card" data-enemy-card="boss_railgun" hidden>
+            <div class="intel-icon-box sniper-box"><canvas class="intel-canvas" data-enemy="boss_railgun" width="120" height="120"></canvas></div>
+            <div class="intel-info">
+              <div class="intel-name-row"><span class="intel-name sniper-color">БОСС «ПАРАЛЛАКС»</span><span class="intel-badge sniper-badge">ФИНАЛ СТАДИИ</span></div>
+              <p class="intel-desc">Босс четвёртого уровня. Держится на дистанции в пределах дальности башни. Замирает, накапливает заряд 1.6 секунды и наносит мощный лучевой удар. После выстрела охлаждается 1.1 секунды, получая на 35% больше урона, затем смещается вокруг башни.</p>
+              <div class="intel-tip">СОВЕТ: Запас HP и броня помогают выдержать выстрел, а урон и скорость атаки позволяют использовать окно охлаждения.</div>
+            </div>
+          </div>
+
+          <!-- 5. Aegis -->
+          <div class="intel-card" data-enemy-card="aegis" hidden>
+            <div class="intel-icon-box aegis-box">
+              <canvas class="intel-canvas" data-enemy="aegis" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name aegis-color">ПЕНТАГОН «ЭГИДА»</span>
+                <span class="intel-badge aegis-badge">СИЛОВОЙ ЩИТ</span>
+              </div>
+              <p class="intel-desc">Медленно приближается, проецируя энергетический купол. Союзники внутри получают на 50% меньше урона. Собственный купол не защищает саму Эгиду.</p>
+              <p class="intel-synergy" data-intel-stage="5" hidden>ВЗАИМОДЕЙСТВИЕ: При наличии снайпера под куполом останавливается на подходе к башне и становится защищённой огневой позицией.</p>
+              <div class="intel-tip">СОВЕТ: Усиливайте огневую мощь — уничтожение Эгиды снимает защиту с её союзников.</div>
+            </div>
+          </div>
+
+          <!-- 6. Splitter -->
+          <div class="intel-card" data-enemy-card="splitter" hidden>
+            <div class="intel-icon-box splitter-box">
+              <canvas class="intel-canvas" data-enemy="splitter" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name splitter-color">ФРАКТАЛ «СПЛИТТЕР»</span>
+                <span class="intel-badge splitter-badge">РАСПАД</span>
+              </div>
+              <p class="intel-desc">При уничтожении распадается на 3 осколка. Сначала они разлетаются назад и в стороны, затем устремляются к ядру.</p>
+              <div class="intel-tip">СОВЕТ: Не подпускайте к ядру — взрыв роя в упор крайне опасен.</div>
+            </div>
+          </div>
+
+          <!-- 7. Blinker -->
+          <div class="intel-card" data-enemy-card="blinker" hidden>
+            <div class="intel-icon-box blinker-box">
+              <canvas class="intel-canvas" data-enemy="blinker" width="120" height="120"></canvas>
+            </div>
+            <div class="intel-info">
+              <div class="intel-name-row">
+                <span class="intel-name blinker-color">ВЕКТОР «БЛИНКЕР»</span>
+                <span class="intel-badge blinker-badge">ТЕЛЕПОРТ</span>
+              </div>
+              <p class="intel-desc">Белый зигзаг. Каждые 2 секунды совершает скачок к ядру и сбрасывает наведение уже летящих в него пуль башни.</p>
+              <div class="intel-tip">СОВЕТ: Высокая скорость атаки помогает снова обстрелять его после скачка.</div>
+            </div>
+          </div>
+
+        </div>
+        <button id="btn-intel-close" class="modal-btn cyan-btn">НА ГЛАВНУЮ</button>
+      </div>
+    </div>
+
       </div>
     </div>
 
@@ -75,18 +262,16 @@
         <div id="canvas-wrapper">
           <canvas id="game-canvas"></canvas>
           <header id="top-hud">
+            <div id="arena-menu-slot"></div>
             <div class="credit-wallet">
-              <span class="wallet-label">КРЕДИТЫ</span>
-              <div id="hud-credits" class="hud-credits">100 ◈</div>
-            </div>
-            <div class="arena-menu-buttons">
-              <button id="btn-to-menu" class="arena-icon-btn" type="button" aria-label="Меню паузы" aria-haspopup="dialog" aria-controls="modal-battle-menu" title="Меню паузы (Esc)">☰</button>
+              <div id="hud-credits" class="hud-credits">0 ◈</div>
+              <div class="run-crystal-wallet" title="Микрочипы за этот бой. Зачисляются после победы или поражения." aria-label="Микрочипы за бой: 0"><strong id="hud-run-crystals">0</strong><span class="chip-icon" aria-hidden="true"></span></div>
             </div>
           </header>
 
           <div id="performance-overlay"><span id="fps-counter" hidden>— FPS · — мс</span></div>
 
-          <div class="battle-controls">
+          <div class="battle-controls" id="arena-speed-slot">
             <div class="speed-controls" id="speed-controls" role="group" aria-label="Управление скоростью игры">
               <output id="game-speed-value" aria-label="Скорость игры" aria-live="polite">1.0×</output>
               <div class="speed-buttons">
@@ -94,6 +279,9 @@
                 <button id="btn-pause" class="speed-btn pause-btn" type="button" aria-label="Пауза / продолжить" title="Пауза (Пробел / P)">⏸</button>
                 <button id="btn-speed-up" class="speed-step-btn" type="button" aria-label="Увеличить скорость">+</button>
               </div>
+            </div>
+            <div class="arena-menu-buttons" id="arena-menu-buttons">
+              <button id="btn-to-menu" class="arena-icon-btn" type="button" aria-label="Меню паузы" aria-haspopup="dialog" aria-controls="modal-battle-menu" title="Меню паузы (Esc)">☰</button>
             </div>
           </div>
         </div>
@@ -103,13 +291,16 @@
             <div id="hud-hp-text"><span class="hp-label">HP</span><span class="hp-value"><strong>300</strong> / 300</span><span class="hp-regen">+1.0/с</span></div>
             <div class="hp-bar-bg"><div id="hud-hp-fill"></div></div>
           </div>
-          <div class="wave-status">
-            <div class="wave-heading"><span id="hud-wave">ВОЛНА 01</span><span id="hud-enemies">ВРАГИ: 0</span></div>
-            <div class="wave-bar-bg"><div id="hud-wave-fill"></div></div>
-            <div id="intermission-container" class="hidden">
-              <span id="intermission-text">СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ 5.0с</span>
-              <div class="intermission-bar-bg"><div id="intermission-bar"></div></div>
+          <div class="wave-status" id="wave-status">
+            <div class="wave-details">
+              <div class="wave-heading"><span id="hud-wave">Волна 1:</span><span id="hud-enemies">Враги 0</span></div>
+              <div class="wave-bar-bg"><div id="hud-wave-fill"></div></div>
+              <div id="intermission-container" class="hidden">
+                <span id="intermission-text">СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ 5.0с</span>
+                <div class="intermission-bar-bg"><div id="intermission-bar"></div></div>
+              </div>
             </div>
+            <div id="mobile-speed-slot"></div>
           </div>
         </div>
       </section>
@@ -126,138 +317,6 @@
       </aside>
     </main>
 
-    <!-- ENEMY INTEL DATABASE MODAL -->
-    <div id="modal-intel" class="modal-backdrop hidden">
-      <div data-scrollable class="modal-content modal-intel-content">
-        <div class="modal-header">
-          <h2 class="modal-title cyan-title">БАЗА ДАННЫХ: ПРОТИВНИКИ</h2>
-          <button id="btn-intel-close-x" class="modal-close-x">&times;</button>
-        </div>
-        <div class="intel-grid">
-          <!-- 1. Scout -->
-          <div class="intel-card">
-            <div class="intel-icon-box scout-box">
-              <canvas class="intel-canvas" data-enemy="scout" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name scout-color">СКАУТ</span>
-                <span class="intel-badge scout-badge">ВОЛНА 1+</span>
-              </div>
-              <p class="intel-desc">Быстрый лёгкий авангард роя. Нападает группами, проверяя базовую огневую мощь башни.</p>
-              <div class="intel-tip">СОВЕТ: Высокая скорость стрельбы легко сдерживает толпу.</div>
-            </div>
-          </div>
-
-          <!-- 2. Tank -->
-          <div class="intel-card">
-            <div class="intel-icon-box tank-box">
-              <canvas class="intel-canvas" data-enemy="tank" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name tank-color">ТАНК</span>
-                <span class="intel-badge tank-badge">ТЯЖЁЛЫЙ</span>
-              </div>
-              <p class="intel-desc">Массивная бронированная крепость. Обладает огромным запасом здоровья и плоской защитой.</p>
-              <div class="intel-tip">СОВЕТ: Прокачивайте урон и критические атаки, чтобы быстрее пробивать большой запас HP.</div>
-            </div>
-          </div>
-
-          <!-- 3. Sniper -->
-          <div class="intel-card">
-            <div class="intel-icon-box sniper-box">
-              <canvas class="intel-canvas" data-enemy="sniper" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name sniper-color">СНАЙПЕР</span>
-                <span class="intel-badge sniper-badge">АРТИЛЛЕРИЯ</span>
-              </div>
-              <p class="intel-desc">Дистанционный боец. Останавливается на краю дальности и ведёт постоянный прицельный обстрел ядра.</p>
-              <div class="intel-tip">СОВЕТ: Увеличивайте радиус атаки башни, чтобы уничтожать их до открытия огня.</div>
-            </div>
-          </div>
-
-          <!-- 4. Fighter -->
-          <div class="intel-card">
-            <div class="intel-icon-box fighter-box">
-              <canvas class="intel-canvas" data-enemy="fighter" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name fighter-color">ИСТРЕБИТЕЛЬ</span>
-                <span class="intel-badge fighter-badge">ШТУРМОВИК</span>
-              </div>
-              <p class="intel-desc">Сверхзвуковой корвет. Несётся на таран по прямой и наносит сокрушительный урон при контакте с ядром.</p>
-              <div class="intel-tip">СОВЕТ: Укрепляйте плоскую броню и уничтожайте их на дальних подступах.</div>
-            </div>
-          </div>
-
-          <!-- 5. Aegis -->
-          <div class="intel-card">
-            <div class="intel-icon-box aegis-box">
-              <canvas class="intel-canvas" data-enemy="aegis" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name aegis-color">ПЕНТАГОН «ЭГИДА»</span>
-                <span class="intel-badge aegis-badge">СИЛОВОЙ ЩИТ</span>
-              </div>
-              <p class="intel-desc">Медленно приближается, проецируя плазменный купол. Все союзники внутри купола получают на 50% меньше урона!</p>
-              <div class="intel-tip">СОВЕТ: Уничтожайте Эгиду в первую очередь, чтобы лишить рой защиты.</div>
-            </div>
-          </div>
-
-          <!-- 6. Splitter -->
-          <div class="intel-card">
-            <div class="intel-icon-box splitter-box">
-              <canvas class="intel-canvas" data-enemy="splitter" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name splitter-color">ФРАКТАЛ «СПЛИТТЕР»</span>
-                <span class="intel-badge splitter-badge">РАСПАД</span>
-              </div>
-              <p class="intel-desc">Нестабильный фрактал. После гибели разлетается назад и порождает 3 скоростных осколка прямо на месте смерти.</p>
-              <div class="intel-tip">СОВЕТ: Не подпускайте к ядру — взрыв роя в упор крайне опасен.</div>
-            </div>
-          </div>
-
-          <!-- 7. Blinker -->
-          <div class="intel-card">
-            <div class="intel-icon-box blinker-box">
-              <canvas class="intel-canvas" data-enemy="blinker" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name blinker-color">ВЕКТОР «БЛИНКЕР»</span>
-                <span class="intel-badge blinker-badge">ТЕЛЕПОРТ</span>
-              </div>
-              <p class="intel-desc">Белый зигзаг. Каждые 2 секунды совершает скачок вперёд и сбрасывает наведение всех летящих снарядов.</p>
-              <div class="intel-tip">СОВЕТ: Мультишот и высокая плотность огня гарантируют попадания.</div>
-            </div>
-          </div>
-
-          <!-- 8. Boss Architect -->
-          <div class="intel-card boss-card">
-            <div class="intel-icon-box architect-box">
-              <canvas class="intel-canvas" data-enemy="boss_architect" width="120" height="120"></canvas>
-            </div>
-            <div class="intel-info">
-              <div class="intel-name-row">
-                <span class="intel-name architect-color">БОСС «АРХИТЕКТОР»</span>
-                <span class="intel-badge architect-badge">КАЖДЫЕ 10 ВОЛН</span>
-              </div>
-              <p class="intel-desc">Гигантский звёздный мега-фрактал. Окружён кольцом вращающихся физических щитов, поглощающих огонь.</p>
-              <div class="intel-tip">СОВЕТ: Пробейте брешь в кольце щитов и стреляйте сквозь неё в незащищённое ядро босса!</div>
-            </div>
-          </div>
-        </div>
-        <button id="btn-intel-close" class="modal-btn cyan-btn">ЗАКРЫТЬ</button>
-      </div>
-    </div>
-
     <!-- HOW TO PLAY / RULES MODAL -->
     <div id="modal-help" class="modal-backdrop hidden">
       <div data-scrollable class="modal-content modal-help-content">
@@ -272,11 +331,11 @@
           </div>
           <div class="help-section">
             <h3 class="help-heading">🎯 ЦЕЛЬ СИСТЕМЫ</h3>
-            <p>Обороняйте центральное ядро башни от нарастающих волн геометрического кибер-роя. Башня ведёт огонь автоматически по целям в своём радиусе.</p>
+                <p>Выберите стадию и выдержите все волны. Если стадию охраняет босс, уничтожьте его. Победа открывает следующую стадию. Башня ведёт огонь автоматически по целям в своём радиусе.</p>
           </div>
           
           <div class="help-section">
-            <h3 class="help-heading">⚙️ ВЕТКИ УЛУЧШЕНИЙ (24 ПАРАМЕТРА)</h3>
+            <h3 class="help-heading">⚙️ ВЕТКИ УЛУЧШЕНИЙ (26 ПАРАМЕТРОВ)</h3>
             <div class="help-branches">
               <div class="help-branch">
                 <span class="branch-title offense-color">АТАКА</span>
@@ -288,7 +347,7 @@
               </div>
               <div class="help-branch">
                 <span class="branch-title utility-color">ЭКОНОМИКА</span>
-                <p>Бонусы кредитов за убийства и волны. «Бесплатное улучшение атаки / защиты / экономики» — три независимых шанса в конце каждой волны бесплатно повысить одно случайное открытое улучшение соответствующей категории. За волну выдаётся не больше одного уровня в каждой категории; максимальные уровни и зависимости соблюдаются.</p>
+                <p>Бонусы кредитов за уничтожения и волны, шанс дропа микрочипов с врагов и процентный бонус микрочипов за волну. Микрочипы за бой зачисляются в постоянный кошелёк после победы или поражения; выход и перезапуск до завершения боя сжигают эту сумму. «Бесплатное улучшение атаки / защиты / экономики» — три независимых шанса в конце каждой волны бесплатно повысить одно случайное открытое улучшение соответствующей категории. За волну выдаётся не больше одного уровня в каждой категории; зависимости соблюдаются, уровни не ограничены.</p>
               </div>
             </div>
           </div>
@@ -313,7 +372,8 @@
 
     <!-- PAUSE MENU -->
     <div id="modal-battle-menu" class="modal-backdrop hidden">
-      <div data-scrollable class="modal-content battle-menu" role="dialog" aria-modal="true" aria-labelledby="battle-menu-title">
+        <div data-scrollable id="battle-menu-dialog" class="modal-content battle-menu" role="dialog" aria-modal="true" aria-labelledby="battle-menu-title">
+        <div id="battle-menu-main" class="battle-menu-main">
         <div class="battle-menu-heading">
           <span class="battle-menu-eyebrow">БОЙ ПРИОСТАНОВЛЕН</span>
           <h2 id="battle-menu-title">ПАУЗА</h2>
@@ -321,6 +381,7 @@
         <button id="btn-battle-resume" class="modal-btn cyan-btn" type="button">ПРОДОЛЖИТЬ БОЙ</button>
         <section class="battle-menu-settings" aria-label="Настройки">
           <h3>НАСТРОЙКИ</h3>
+          <div class="battle-language-setting"><span>Язык</span><button id="btn-language" class="language-toggle" type="button">Русский</button></div>
           <div class="battle-menu-audio">
             <button id="btn-sound-sfx" class="audio-btn" type="button"><span class="audio-icon">🔊</span><span class="audio-label">ЗВУК</span></button>
             <button id="btn-sound-music" class="audio-btn" type="button"><span class="audio-icon">🎵</span><span class="audio-label">МУЗЫКА</span></button>
@@ -331,17 +392,27 @@
           <button id="btn-battle-restart" class="modal-btn secondary-btn" type="button">НАЧАТЬ ЗАНОВО</button>
           <button id="btn-battle-exit" class="modal-btn secondary-btn" type="button">В ГЛАВНОЕ МЕНЮ</button>
         </div>
-        <p class="battle-menu-note">Перезапуск и выход сбросят прогресс боя.</p>
+        <p class="battle-menu-note">Выход и перезапуск сжигают микрочипы за бой. Выплата — после победы или поражения.</p>
+        </div>
+        <section id="abandon-run-confirm" class="abandon-run-confirm" hidden>
+          <span class="battle-menu-eyebrow">НЕЗАВЕРШЁННЫЙ БОЙ</span>
+          <h2 id="abandon-run-title">Микрочипы будут потеряны</h2>
+          <p id="abandon-run-text"></p>
+          <button id="btn-abandon-cancel" class="modal-btn cyan-btn" type="button">ОСТАТЬСЯ В БОЮ</button>
+          <button id="btn-abandon-accept" class="modal-btn secondary-btn" type="button">ПОТЕРЯТЬ И ВЫЙТИ</button>
+        </section>
       </div>
     </div>
 
     <!-- GAME OVER MODAL -->
     <div id="modal-gameover" class="modal-backdrop hidden">
       <div data-scrollable class="modal-content">
-        <h2 class="modal-title">СИСТЕМА СБИТА</h2>
+        <h2 id="result-title" class="modal-title">СИСТЕМА СБИТА</h2>
         <div class="modal-body">
-          <p>Центральное ядро уничтожено роем.</p>
+          <p id="result-description">Центральное ядро уничтожено роем.</p>
           <p>Достигнутый рубеж: <span id="modal-final-wave">ВОЛНА 01</span></p>
+          <p id="result-unlock" hidden></p>
+          <div class="gameover-crystal-reward"><span>МИКРОЧИПЫ ЗА БОЙ</span><div class="chip-amount"><strong id="gameover-crystals">+0</strong><span class="chip-icon" aria-hidden="true"></span></div><span>В кошельке: <b id="gameover-crystal-balance">0</b></span></div>
         </div>
         <div class="modal-buttons-row">
           <button id="btn-restart" class="modal-btn">ПЕРЕЗАПУСТИТЬ</button>
@@ -361,6 +432,6 @@
   </div>
 
   <!-- ENTRY MODULE -->
-  <script type="module" src="src/main.js?v=2.36"></script>
+  <script type="module" src="src/main.js?v=3.04"></script>
 </body>
 </html>

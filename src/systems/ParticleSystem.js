@@ -5,6 +5,8 @@
 
 import { TransformComponent } from '../components/TransformComponent.js';
 
+const REWARD_FLOAT_SPEED = 60;
+
 export class ParticleSystem {
   constructor() {
     this.particles = [];
@@ -21,8 +23,15 @@ export class ParticleSystem {
 
 
   init(world) {
+    world.eventBus.on('RUN_CRYSTALS_CHANGED', event => {
+      if (event.source !== 'kill' || !Number.isFinite(event.x) || !Number.isFinite(event.y)) return;
+      // A separate row with the same velocity keeps both rewards apart throughout their flight.
+      this.floatingTexts.push({ x: event.x, y: event.y - 48, text: `+${event.earned}`, icon: 'microchip',
+        color: '#9cd5ff', fontSize: 18, isCrit: false, vy: REWARD_FLOAT_SPEED, life: 1.3, maxLife: 1.3 });
+    });
     // 1. Damage dealt: hit sparks only (no screen-cluttering damage numbers)
     world.eventBus.on('DAMAGE_DEALT', (event) => {
+      if (event.isContinuous) return; // Drill impact is rendered by its bounded visual cache.
       this._spawnDamageSparks(event.x, event.y, event.isCrit ? '#ffe600' : '#00f3ff', event.isCrit ? 10 : 5);
     });
 
@@ -33,10 +42,10 @@ export class ParticleSystem {
           x: event.x + (Math.random() * 10 - 5),
           y: event.y - 12,
           text: `+${event.earned} ◈`,
-          color: '#00ff88', // Vibrant cyber-cash neon green (distinct from white/yellow damage)
+          color: '#f0db96', // Same gold as the credit wallet and upgrade prices.
           fontSize: event.earned >= 30 ? 22 : 18,
           isCrit: event.earned >= 30, // Extra glow for high-value targets like tanks
-          vy: 60,
+          vy: REWARD_FLOAT_SPEED,
           life: 1.0,
           maxLife: 1.0
         });
@@ -54,11 +63,12 @@ export class ParticleSystem {
         splitter: '#00ff66',
         splitter_shard: '#00ff66',
         blinker: '#ffffff',
-        boss_architect: '#ff0055',
+        boss_architect: '#ff7189',
+        boss_railgun: '#ff9e50',
         boss_shield: '#00f3ff'
       };
       const color = colorMap[event.enemyType] || '#00f3ff';
-      const isBoss = event.enemyType === 'boss_architect';
+      const isBoss = event.enemyType === 'boss_architect' || event.enemyType === 'boss_railgun';
 
       // Burst of fragments
       const particleCount = isBoss ? 45 : (event.enemyType === 'tank' || event.enemyType === 'splitter' ? 24 : 14);
@@ -95,7 +105,7 @@ export class ParticleSystem {
       if (!position) return;
       event.granted.forEach((grant, index) => {
         this.floatingTexts.push({ x: position.x, y: position.y - 50 - index * 22,
-          text: `БЕСПЛАТНО: ${grant.name} +1`, color: '#9ee9bf', fontSize: 15, isCrit: false,
+          text: `БЕСПЛАТНО: ${grant.name} +1`, upgradeName: grant.name, color: '#9ee9bf', fontSize: 15, isCrit: false,
           vy: 12, life: 3, maxLife: 3 });
       });
     });

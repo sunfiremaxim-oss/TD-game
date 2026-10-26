@@ -15,6 +15,7 @@ import { RenderComponent } from '../components/RenderComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { DevControlComponent } from '../components/DevControlComponent.js';
 
 import { getExpectedInFlightDamage } from '../combat/DamageCalculation.js?v=2.7';
 
@@ -24,6 +25,8 @@ export class WeaponSystem {
     if (towers.length === 0) return;
 
     const towerId = towers[0];
+    const dev = world.getComponent(towerId, DevControlComponent);
+    if (GameConfig.devTools.enabled && dev?.enabled && dev.firingDisabled) return;
     const attack = world.getComponent(towerId, AttackComponent);
     const targetComp = world.getComponent(towerId, TargetComponent);
     const towerTrans = world.getComponent(towerId, TransformComponent);

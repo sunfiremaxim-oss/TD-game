@@ -12,8 +12,18 @@ import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { AttackComponent } from '../components/AttackComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { FighterSteering } from './FighterSteering.js';
+import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
+import { CarrierComponent } from '../components/CarrierComponent.js';
+import { getCarrierOrbitRadius } from '../combat/CarrierMechanics.js';
+import { RailgunComponent } from '../components/RailgunComponent.js';
+import { getRailgunOrbitRadius } from '../combat/RailgunMechanics.js';
 
 export class MovementSystem {
+  constructor() {
+    this.fighterSteering = new FighterSteering();
+  }
+
   init(world) {
     // When an entity dies, immediately disconnect homing on all projectiles targeting it
     world.eventBus.on('ENTITY_DIED', (event) => {
@@ -44,6 +54,7 @@ export class MovementSystem {
 
     // 2. Steer marching enemies towards tower (with Sniper-Aegis tactical escort synergy)
     const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, VelocityComponent);
+    this.fighterSteering.prepare(world, enemyEntities, towerX, towerY, towerRadius);
 
     // Tower attack range for perimeter stopping (snipers and Aegis holding mobile bunker)
     const towerAttack = towerEntities.length > 0 ? world.getComponent(towerEntities[0], AttackComponent) : null;
@@ -84,6 +95,8 @@ export class MovementSystem {
       }
 
       if (enemyComp.knockbackRemaining > 0 && deltaTime > 0) {
+        const drill = world.getComponent(id, ArchitectDrillComponent);
+        if (drill) drill.aimReady = false;
         const activeTime = Math.min(deltaTime, enemyComp.knockbackRemaining);
         velocity.vx = enemyComp.knockbackVx * activeTime / deltaTime;
         velocity.vy = enemyComp.knockbackVy * activeTime / deltaTime;
@@ -112,6 +125,60 @@ export class MovementSystem {
       const col = world.getComponent(id, CircleColliderComponent);
       const enemyRadius = col ? col.radius : 12;
       const stopDist = towerRadius + enemyRadius;
+
+      const carrier = world.getComponent(id, CarrierComponent);
+      const rail = world.getComponent(id, RailgunComponent);
+      if (rail) {
+        const orbit = getRailgunOrbitRadius(towerRadius,enemyRadius,currentTowerRange);
+        const distance = Math.max(dist,.0001), nx = dx/distance, ny = dy/distance;
+        const radial = deltaTime > 0 ? Math.max(-velocity.currentSpeed,Math.min(velocity.currentSpeed,(dist-orbit)/deltaTime)) : 0;
+        // Integrate the arc exactly, rather than accumulating outward Euler
+        // drift that could interrupt charging after a long x3 frame.
+        const turn = Math.abs(dist-orbit)<3 && rail.phase==='reposition'
+          ? GameConfig.enemies.boss_railgun.orbitSpeed * rail.orbitDirection * Math.min(deltaTime,rail.phaseRemaining) : 0;
+        const nextRadius = Math.max(0,dist-radial*deltaTime), c=Math.cos(turn), s=Math.sin(turn);
+        const nextX=towerX+(-nx*c+ny*s)*nextRadius, nextY=towerY+(-nx*s-ny*c)*nextRadius;
+        velocity.vx = deltaTime>0?(nextX-transform.x)/deltaTime:0;
+        velocity.vy = deltaTime>0?(nextY-transform.y)/deltaTime:0;
+        transform.rotation = Math.atan2(towerY-nextY,towerX-nextX);
+        continue;
+      }
+      if (carrier) {
+        const orbit = getCarrierOrbitRadius(towerRadius, enemyRadius, currentTowerRange);
+        const distance = Math.max(dist, .0001), nx = dx / distance, ny = dy / distance;
+        const radial = deltaTime > 0 ? Math.max(-velocity.currentSpeed, Math.min(velocity.currentSpeed, (dist - orbit) / deltaTime)) : 0;
+        const tangent = Math.abs(dist - orbit) < 3 ? orbit * GameConfig.enemies.boss_carrier.orbitSpeed * carrier.orbitDirection : 0;
+        velocity.vx = nx * radial - ny * tangent;
+        velocity.vy = ny * radial + nx * tangent;
+        transform.rotation = Math.atan2(dy, dx);
+        continue;
+      }
+
+      if (enemyComp.type === 'boss_architect' && world.hasComponent(id, ArchitectDrillComponent)) {
+        const drill = world.getComponent(id, ArchitectDrillComponent);
+        const cfg = GameConfig.enemies.boss_architect;
+        const drillDistance = stopDist + cfg.drillGap;
+        // Clamp this step at the firing position, including large x3 frames.
+        const speed = deltaTime > 0 ? Math.max(-velocity.currentSpeed, Math.min(velocity.currentSpeed, (dist - drillDistance) / deltaTime)) : 0;
+        velocity.vx = dist > 0 ? dx / dist * speed : 0;
+        velocity.vy = dist > 0 ? dy / dist * speed : 0;
+        const remainingDistance = dist - speed * deltaTime;
+        if (Math.abs(remainingDistance - drillDistance) <= .5) {
+          // Face the tower with the joint between two plates. Their recessed
+          // broad-face emitters flank this diagonal, leaving the barrel clear.
+          const quarter = Math.PI / 2;
+          const bearing = Math.atan2(dy, dx);
+          const alignment = bearing - transform.rotation - Math.PI / 4;
+          const error = alignment - Math.round(alignment / quarter) * quarter;
+          const turnStep = Math.abs(enemyComp.rotationSpeed) * deltaTime;
+          drill.aimReady = Math.abs(error) <= turnStep + 1e-9;
+          transform.rotation += drill.aimReady ? error : Math.sign(error) * turnStep;
+        } else {
+          drill.aimReady = false;
+          transform.rotation += enemyComp.rotationSpeed * deltaTime;
+        }
+        continue;
+      }
 
       // Tactical AI: Aegis (Shield Fortress)
       if (enemyComp.type === 'aegis') {
@@ -236,13 +303,18 @@ export class MovementSystem {
       }
 
       if (dist > stopDist) {
-        velocity.vx = (dx / dist) * velocity.currentSpeed;
-        velocity.vy = (dy / dist) * velocity.currentSpeed;
+        if (enemyComp.type === 'fighter') {
+          this.fighterSteering.steer(world, id, transform, velocity, towerX, towerY, stopDist, enemyRadius, deltaTime, currentTowerRange);
+        } else {
+          velocity.vx = (dx / dist) * velocity.currentSpeed;
+          velocity.vy = (dy / dist) * velocity.currentSpeed;
+        }
 
         if (enemyComp.rotationSpeed && enemyComp.rotationSpeed !== 0) {
           transform.rotation += enemyComp.rotationSpeed * deltaTime;
         } else {
-          transform.rotation = Math.atan2(dy, dx);
+          transform.rotation = enemyComp.type === 'fighter'
+            ? Math.atan2(velocity.vy, velocity.vx) : Math.atan2(dy, dx);
         }
       } else {
         // Enemy is pressing up against the tower core collider!
@@ -310,7 +382,7 @@ export class MovementSystem {
     // 4.5 Update orbiting shield segments for Boss Architect
     for (const id of enemyEntities) {
       const enemyComp = world.getComponent(id, EnemyComponent);
-      if (enemyComp && enemyComp.type === 'boss_architect') {
+      if (enemyComp?.type === 'boss_architect' && enemyComp.shieldIds?.length) {
         const bossTrans = world.getComponent(id, TransformComponent);
         if (!bossTrans) continue;
 
