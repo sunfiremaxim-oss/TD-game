@@ -21,6 +21,8 @@ import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.j
 import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
 import { CarrierComponent } from '../components/CarrierComponent.js';
 import { RailgunComponent } from '../components/RailgunComponent.js';
+import { CitadelComponent, CitadelGeneratorComponent } from '../components/CitadelComponent.js';
+import { FractalComponent, FractalBranchComponent } from '../components/FractalComponent.js';
 
 export class WaveSystem {
   constructor() {
@@ -35,9 +37,13 @@ export class WaveSystem {
     this.spawnTimer = 0.3; // First enemy spawns in 0.3s
     this.totalEnemiesInWave = 0;
     this.enemiesSpawned = 0;
+    this.fractalProgressDirty = false;
   }
 
   init(world) {
+    world.eventBus.on('ENTITY_DIED', event => {
+      if (event.isEnemy) this._spawnFractalChildren(world,event.entityId);
+    });
     world.eventBus.on('CARRIER_LAUNCH', ({ carrierId }) => this._spawnCarrierWing(world, carrierId));
     world.eventBus.on('SPLITTER_SPLIT', (event) => {
       this._spawnSplitterShards(world, event.x, event.y);
@@ -56,6 +62,7 @@ export class WaveSystem {
   }
 
   reset() {
+    this.fractalProgressDirty = false;
     this.stageId = null;
     this.currentWave = 1;
     this.state = 'IDLE';
@@ -68,6 +75,11 @@ export class WaveSystem {
   }
 
   update(world, deltaTime) {
+    if (this.fractalProgressDirty && !world.isGameOver && !world.inMenu) {
+      this.fractalProgressDirty = false;
+      world.eventBus.emit('WAVE_PROGRESS',{wave:this.currentWave,total:this.totalEnemiesInWave,spawned:this.enemiesSpawned,
+        alive:world.getEntitiesWith(EnemyComponent,HealthComponent).filter(id=>world.getComponent(id,HealthComponent).current>0).length});
+    }
     if (this.state === 'IDLE' || world.isGameOver) return;
     const devId = world.getEntitiesWith(DevControlComponent)[0];
     const dev = devId === undefined ? null : world.getComponent(devId, DevControlComponent);
@@ -315,7 +327,9 @@ export class WaveSystem {
     // Guaranteed off-screen perimeter spawn adapted to current canvas dimensions & aspect ratio:
     // Architect bounds include its solid hull and the baked glow, without satellites.
     // Standard enemies have radius up to 22 + glowBlur 14.
-    const baseMargin = type.startsWith('boss_') ? archetype.radius + 30 : 55;
+    const baseMargin = type === 'boss_fractal' ? archetype.branchOrbit+GameConfig.enemies.fractal_branch.radius+30
+      : type === 'boss_citadel' ? archetype.generatorOrbit + GameConfig.enemies.citadel_generator.radius + 30
+      : type.startsWith('boss_') ? archetype.radius + 30 : 55;
     // Add small random depth jitter (0 to 25px) so units don't spawn in a rigid flat line
     const margin = baseMargin + Math.random() * 25;
 
@@ -440,6 +454,49 @@ export class WaveSystem {
 
     world.addComponent(enemyId, enemyComp);
 
+    if (type === 'fractal_branch' || type === 'fractal_fragment' || type === 'fractal_shard') {
+      const depth = type === 'fractal_branch' ? 0 : type === 'fractal_fragment' ? 1 : 2;
+      world.addComponent(enemyId,new FractalBranchComponent(overrides.fractalOwnerId??null,overrides.fractalOwnerHealth??null,
+        overrides.fractalSlot??0,depth,overrides.fractalAttached??false));
+      world.getComponent(enemyId,CircleColliderComponent).isStatic = !!overrides.fractalAttached;
+      enemyComp.baseReward = 0;
+    }
+    if (type === 'boss_fractal') {
+      const fractal = new FractalComponent(),health = world.getComponent(enemyId,HealthComponent);
+      const position = world.getComponent(enemyId,TransformComponent);
+      world.addComponent(enemyId,fractal);
+      enemyComp.rotationSpeed = (Math.random()<.5?-1:1)*archetype.rotationSpeed;
+      for (let slot=0;slot<4;slot++) {
+        const angle = position.rotation+slot*Math.PI/2;
+        const id = this._spawnEnemy(world,'fractal_branch',{x:position.x+Math.cos(angle)*archetype.branchOrbit,
+          y:position.y+Math.sin(angle)*archetype.branchOrbit,rotation:angle,
+          fractalOwnerId:enemyId,fractalOwnerHealth:health,fractalSlot:slot,fractalAttached:true});
+        fractal.branches.push({id,health:world.getComponent(id,HealthComponent)});
+      }
+      this.totalEnemiesInWave+=4;this.enemiesSpawned+=4;
+    }
+
+    if (type === 'boss_citadel') {
+      const citadel = new CitadelComponent();
+      world.addComponent(enemyId,citadel);
+      enemyComp.rotationSpeed = (Math.random() < .5 ? -1 : 1) * archetype.rotationSpeed;
+      const ownerHealth = world.getComponent(enemyId,HealthComponent);
+      const position = world.getComponent(enemyId,TransformComponent);
+      for (let slot = 0; slot < 6; slot++) {
+        const angle = position.rotation + slot * Math.PI / 3;
+        const id = this._spawnEnemy(world,'citadel_generator', {
+          x:position.x+Math.cos(angle)*archetype.generatorOrbit,
+          y:position.y+Math.sin(angle)*archetype.generatorOrbit, rotation:angle
+        });
+        world.addComponent(id,new CitadelGeneratorComponent(enemyId,ownerHealth,slot));
+        // Attached modules are not independent physics bodies.
+        world.getComponent(id,CircleColliderComponent).isStatic = true;
+        world.getComponent(id,EnemyComponent).baseReward = 0;
+        citadel.generators.push({id,health:world.getComponent(id,HealthComponent)});
+      }
+      this.totalEnemiesInWave += 6; this.enemiesSpawned += 6;
+    }
+
     world.eventBus.emit('ENEMY_SPAWNED', {
       entityId: enemyId,
       type: archetype.type,
@@ -470,6 +527,28 @@ export class WaveSystem {
     }
     world.eventBus.emit('WAVE_PROGRESS', { wave: this.currentWave, total: this.totalEnemiesInWave, spawned: this.enemiesSpawned,
       alive: world.getEntitiesWith(EnemyComponent).filter(entity => world.getComponent(entity, EnemyComponent).type !== 'boss_shield').length });
+  }
+
+  _spawnFractalChildren(world,id) {
+    const branch = world.getComponent(id,FractalBranchComponent),health = world.getComponent(id,HealthComponent);
+    const position = world.getComponent(id,TransformComponent);
+    if (!branch?.pendingSplit || branch.depth>=2 || !health || health.current>0 || !position || world.inMenu || world.isGameOver) return;
+    branch.pendingSplit = false; // Consume before spawning; re-entrant death events cannot duplicate a lineage.
+    const type = branch.depth===0?'fractal_fragment':'fractal_shard',cfg = GameConfig.enemies[type];
+    const tower = world.getEntitiesWith(TowerComponent,TransformComponent)[0];
+    const target = tower===undefined?{x:world.width/2,y:world.height/2}:world.getComponent(tower,TransformComponent);
+    const away = Math.atan2(position.y-target.y,position.x-target.x);
+    for (let slot=0;slot<GameConfig.enemies.boss_fractal.splitCount;slot++) {
+      const angle = away+(slot-1)*.8;
+      const child = this._spawnEnemy(world,type,{x:position.x+Math.cos(angle)*(cfg.radius+4),
+        y:position.y+Math.sin(angle)*(cfg.radius+4),rotation:angle,
+        fractalOwnerId:branch.ownerId,fractalOwnerHealth:branch.ownerHealth,fractalSlot:slot});
+      const velocity = world.getComponent(child,VelocityComponent);
+      velocity.vx=Math.cos(angle)*100;velocity.vy=Math.sin(angle)*100;
+      world.getComponent(child,EnemyComponent).scatterTimer=.24;
+      this.totalEnemiesInWave++;this.enemiesSpawned++;
+    }
+    this.fractalProgressDirty = true;
   }
 
   _spawnSplitterShards(world, x, y) {

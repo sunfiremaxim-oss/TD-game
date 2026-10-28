@@ -16,6 +16,8 @@ import { EnemyComponent } from '../components/EnemyComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { DevControlComponent } from '../components/DevControlComponent.js';
+import { isCombatTargetAvailable } from '../combat/CitadelMechanics.js';
+import { getContactTarget } from '../combat/ContactTargeting.js';
 
 import { getExpectedInFlightDamage } from '../combat/DamageCalculation.js?v=2.7';
 
@@ -50,10 +52,11 @@ export class WeaponSystem {
 
     // 2. Scan for all living enemies strictly within attack range
     const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
+    const contactId = getContactTarget(world,towerId,targetComp,attack.range,enemyEntities);
     const enemiesInRange = [];
 
     for (const enemyId of enemyEntities) {
-      if (world.destructionQueue.has(enemyId)) continue;
+      if (world.destructionQueue.has(enemyId) || !isCombatTargetAvailable(world,enemyId)) continue;
       const eHealth = world.getComponent(enemyId, HealthComponent);
       const eTrans = world.getComponent(enemyId, TransformComponent);
       if (!eHealth || eHealth.current <= 0 || !eTrans) continue;
@@ -76,6 +79,7 @@ export class WeaponSystem {
 
     // 3. Predictive filtering: prioritize enemies that need damage
     const needyEnemies = enemiesInRange.filter(e => e.effectiveHp > 0);
+    if (contactId!=null && !needyEnemies.some(enemy=>enemy.id===contactId)) return;
     if (needyEnemies.length === 0) {
       // All enemies in range are already slated to die from incoming bullets!
       // Hold fire so we don't waste shots or send stray bullets into the void.
@@ -83,7 +87,7 @@ export class WeaponSystem {
     }
 
     // Every volley selects the nearest enemies needing damage, with no sticky priority.
-    needyEnemies.sort((a, b) => a.distanceSquared - b.distanceSquared);
+    needyEnemies.sort((a, b) => Number(b.id===contactId)-Number(a.id===contactId) || a.distanceSquared-b.distanceSquared);
     const primaryTarget = needyEnemies[0];
     targetComp.targetEntityId = primaryTarget.id;
 
@@ -155,7 +159,8 @@ export class WeaponSystem {
       towerId,
       targetId,
       0,
-      GameConfig.projectile.maxLifetime,
+      // A perimeter boss must remain reachable after long-range upgrades.
+      Math.max(GameConfig.projectile.maxLifetime, Math.hypot(dx,dy)/speed+.5),
       damage,
       isCrit,
       false, // player projectile

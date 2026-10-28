@@ -170,10 +170,18 @@ export class ProjectileVisualCache {
   constructor(createCanvas) { this.cache = new SpriteCache(16, 128, createCanvas); }
   draw(ctx, render, projectile, density) {
     const extent = Math.max(render.radius, projectile.isCrit ? 8 : 6) + render.glowBlur * 3 + 4;
-    const key = `${projectile.isEnemy}|${projectile.isCrit}|${styleKey(render)}`;
+    const key = `${projectile.isEnemy}|${projectile.isCrit}|${!!projectile.isHeavyPlasma}|${styleKey(render)}`;
     const sprite = this.cache.get(key, extent, density, c => {
       c.shadowColor = render.glowColor; c.shadowBlur = render.glowBlur; c.fillStyle = render.color;
-      if (projectile.isEnemy) { c.beginPath(); c.arc(0, 0, render.radius, 0, Math.PI * 2); c.fill(); }
+      if (projectile.isHeavyPlasma) {
+        // A compact cached wake, bright envelope and hot core distinguish heavy plasma.
+        c.fillStyle='#5b95ff50';c.beginPath();c.moveTo(-render.radius*2.8,0);
+        c.lineTo(0,-render.radius*.75);c.lineTo(0,render.radius*.75);c.closePath();c.fill();
+        c.fillStyle='#69bfff';c.beginPath();c.arc(0,0,render.radius,0,Math.PI*2);c.fill();
+        c.shadowBlur=0;c.fillStyle='#e4fcff';c.beginPath();c.arc(1,0,render.radius*.48,0,Math.PI*2);c.fill();
+        c.strokeStyle='#b7ecff';c.lineWidth=1;c.beginPath();c.arc(0,0,render.radius*1.22,-1.2,1.2);c.stroke();
+      }
+      else if (projectile.isEnemy) { c.beginPath(); c.arc(0, 0, render.radius, 0, Math.PI * 2); c.fill(); }
       else { const length = projectile.isCrit ? 16 : 12, width = projectile.isCrit ? 5 : 3.5; c.fillRect(-length / 2, -width / 2, length, width); }
     });
     blit(ctx, sprite);

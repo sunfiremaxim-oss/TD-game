@@ -250,7 +250,41 @@ export const GameConfig = {
       baseHp: 360, baseDamage: 24, baseReward: 500,
       color: '#ffb665', glowColor: '#ff7a26', glowBlur: 12,
       chargeDuration: 1.6, beamDuration: .22, cooldownDuration: 1.1,
-      repositionDuration: 2.2, orbitSpeed: .30, coolingDamageMultiplier: 1.35
+      repositionDuration: 2.2, orbitSpeed: .30, coolingShieldHpFraction: .08
+    },
+    // Stage-five fortress: six destructible generators, then an exposed hull.
+    boss_citadel: {
+      type: 'boss_citadel', sides: 6, radius: 48, baseSpeed: 36, mass: 28,
+      baseHp: 260, baseDamage: 32, baseReward: 550,
+      color: '#a8daff', glowColor: '#628dff', glowBlur: 12,
+      rotationSpeed: .48, generatorOrbit: 58, shootInterval: 3, projectileSpeed: 170
+    },
+    citadel_generator: {
+      type: 'citadel_generator', sides: 6, radius: 14, baseSpeed: 0, mass: 10,
+      baseHp: 28, baseDamage: 0, baseReward: 0,
+      color: '#7de6ff', glowColor: '#488fff', glowBlur: 8
+    },
+    boss_fractal: {
+      type: 'boss_fractal', sides: 4, radius: 30, baseSpeed: 33, mass: 20,
+      baseHp: 180, baseDamage: 32, baseReward: 600,
+      color: '#83ffc2', glowColor: '#37f593', glowBlur: 10,
+      branchOrbit: 54, rotationSpeed: .20, detachHealthFraction: .5,
+      chargeDuration: .85, beamDuration: .20, cooldownDuration: 2.5, damageFloor: .20, splitCount: 3
+    },
+    fractal_branch: {
+      type: 'fractal_branch', sides: 4, radius: 36, baseSpeed: 34, mass: 5,
+      baseHp: 35, baseDamage: 5, baseReward: 0,
+      color: '#86ffc0', glowColor: '#39ff98', glowBlur: 9
+    },
+    fractal_fragment: {
+      type: 'fractal_fragment', sides: 4, radius: 12, baseSpeed: 46, mass: 1.3,
+      baseHp: 12, baseDamage: 2, baseReward: 0,
+      color: '#a8ffce', glowColor: '#43ffa2', glowBlur: 7
+    },
+    fractal_shard: {
+      type: 'fractal_shard', sides: 4, radius: 7, baseSpeed: 66, mass: .5,
+      baseHp: 4, baseDamage: .5, baseReward: 0,
+      color: '#caffdf', glowColor: '#67ffaf', glowBlur: 5
     },
     // Legacy segments retained for projectile/orbit regression fixtures; not spawned in gameplay.
     boss_shield: {

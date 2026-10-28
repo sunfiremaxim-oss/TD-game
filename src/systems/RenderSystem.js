@@ -26,8 +26,14 @@ import { CircleColliderComponent } from '../components/CircleColliderComponent.j
 import { getHealthRatio, getHealthColor } from '../visuals/HealthVisuals.js';
 import { drawBossHullHealth } from '../visuals/BossHealthVisual.js';
 import { drawScoutBossBody } from '../visuals/ScoutBossVisual.js';
-import { drawRailgunBody, RailgunBeamVisual } from '../visuals/RailgunVisual.js';
+import { drawRailgunBody, RailgunBeamVisual, RailgunShieldVisual } from '../visuals/RailgunVisual.js';
 import { RailgunComponent } from '../components/RailgunComponent.js';
+import { getRailgunShieldHealth } from '../combat/RailgunMechanics.js';
+import { drawCitadelBody, drawCitadelGenerator, CitadelShieldVisual, getCitadelShieldRadius } from '../visuals/CitadelVisual.js';
+import { CitadelComponent, CitadelGeneratorComponent } from '../components/CitadelComponent.js';
+import { isCitadelProtected, getCitadelGeneratorMask } from '../combat/CitadelMechanics.js';
+import { FractalComponent, FractalBranchComponent } from '../components/FractalComponent.js';
+import { drawFractalCore, drawFractalBranch, drawFractalHealth, FractalDischargeVisual, FractalChargeVisual } from '../visuals/FractalVisual.js';
 import { t } from '../i18n/I18n.js';
 import { AegisShieldVisual, AEGIS_SHIELD_ATTENUATION, getAegisCoverStrength } from '../visuals/AegisShieldVisual.js';
 
@@ -44,6 +50,7 @@ export class RenderSystem {
     this.enemyVisualCache = new EnemyVisualCache();
     this.architectDrillVisual = new ArchitectDrillVisual();
     this.railgunBeamVisual = new RailgunBeamVisual();
+    this.railgunShieldVisual = new RailgunShieldVisual();
     this.projectileVisualCache = new ProjectileVisualCache();
     this.spaceVisualCache = new SpaceVisualCache();
     this.gridOffset = 0;
@@ -51,6 +58,9 @@ export class RenderSystem {
     this.radarRotation = 0;
     this.isRenderSystem = true;
     this.aegisShieldVisual = new AegisShieldVisual();
+    this.citadelShieldVisual = new CitadelShieldVisual();
+    this.fractalDischargeVisual = new FractalDischargeVisual();
+    this.fractalChargeVisual = new FractalChargeVisual();
     this._compactPauseQuery = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
       ? window.matchMedia('(max-width: 1100px), (max-height: 600px)') : null;
 
@@ -97,7 +107,11 @@ export class RenderSystem {
     this._drawRailgunBeams(ctx,world);
 
     // 4. Draw enemies and health bars
+    this._drawFractalEffects(ctx,world,true);
     this._drawEnemies(ctx, world);
+    this._drawFractalEffects(ctx,world);
+    this._drawRailgunShields(ctx,world);
+    this._drawCitadelShields(ctx,world);
 
     // The translucent shell encloses the emitter and allies, rather than sitting behind them.
     this._drawAegisDomes(ctx, world);
@@ -867,21 +881,32 @@ export class RenderSystem {
       const render = world.getComponent(id, RenderComponent);
       const health = world.getComponent(id, HealthComponent);
       const enemy = world.getComponent(id, EnemyComponent);
+      const strike = enemy.meleeAttackRemaining>0 ? Math.sin(Math.PI*Math.min(1,enemy.meleeAttackRemaining/.18)) : 0;
+      const thrust = strike*Math.min(4,render.radius*.2),drawX=trans.x+Math.cos(enemy.meleeAttackAngle||0)*thrust;
+      const drawY=trans.y+Math.sin(enemy.meleeAttackAngle||0)*thrust,attackScale=1+strike*.055;
       const extent = render.radius * 1.5 + render.glowBlur * 3 + 20;
       if (trans.x + extent < 0 || trans.y + extent < 0 || trans.x - extent > world.width || trans.y - extent > world.height) continue;
-      const cover = getAegisCoverStrength(trans.x, trans.y, fields);
+      const citadelOwner = world.getComponent(id,CitadelGeneratorComponent)?.ownerId ?? id;
+      const citadelCover = isCitadelProtected(world,citadelOwner);
+      const cover = Math.max(citadelCover ? 1 : 0,getAegisCoverStrength(trans.x, trans.y, fields));
       const glowScale = 1 - (1 - AEGIS_SHIELD_ATTENUATION.glow) * cover;
 
       ctx.save();
-      ctx.translate(trans.x, trans.y);
-      ctx.rotate(trans.rotation);
+      ctx.translate(drawX, drawY);
+      ctx.rotate(trans.rotation);if(strike>0)ctx.scale(attackScale,attackScale);
       ctx.globalAlpha *= 1 - (1 - AEGIS_SHIELD_ATTENUATION.opacity) * cover;
 
       const pixelScale = (this.canvas?.pixelRatio || 1) * (world.renderScale || 1);
       const carrier = world.getComponent(id, CarrierComponent);
       const siege = world.getComponent(id, ArchitectSiegeComponent);
       const rail = world.getComponent(id,RailgunComponent);
-      const phase = rail ? (rail.phase==='approach'||rail.phase==='reposition'?'idle':rail.phase) : siege ? (siege.phase === 'approach' ? 'armored' : siege.phase)
+      const citadel = world.getComponent(id,CitadelComponent);
+      const fractal = world.getComponent(id,FractalComponent), branch = world.getComponent(id,FractalBranchComponent);
+      const parentFractal = branch?.attached && world.getComponent(branch.ownerId,HealthComponent)===branch.ownerHealth
+        ? world.getComponent(branch.ownerId,FractalComponent) : null;
+      const activeFractal = fractal || parentFractal;
+      const phase = activeFractal ? (activeFractal.phase==='charge'||activeFractal.phase==='firing'?activeFractal.phase:'idle')
+        : branch ? (branch.depth>0?'small':'large') : citadel ? (isCitadelProtected(world,id)?'protected':'exposed') : rail ? (rail.phase==='approach'?'idle':rail.phase==='reposition'?'cooldown':rail.phase) : siege ? (siege.phase === 'approach' ? 'armored' : siege.phase)
         : carrier ? (carrier.phase === 'exposed' ? 'exposed' : carrier.phase === 'launch' ? 'launch' : 'closed') : '';
       const armorOpen = siege ? getArchitectArmorOpen(siege, GameConfig.enemies.boss_architect) : undefined;
       if (this.enemyVisualCache) this.enemyVisualCache.draw(ctx, this, enemy.type, render, glowScale, pixelScale, phase, armorOpen);
@@ -889,12 +914,66 @@ export class RenderSystem {
 
       ctx.restore();
 
-      if (enemy.type === 'boss_architect' || enemy.type === 'boss_carrier' || enemy.type === 'boss_scout' || enemy.type === 'boss_railgun') {
-        ctx.save(); ctx.translate(trans.x, trans.y); ctx.rotate(trans.rotation);
+      if (fractal || branch) {
+        ctx.save();ctx.translate(drawX,drawY);ctx.rotate(trans.rotation);if(strike>0)ctx.scale(attackScale,attackScale);drawFractalHealth(ctx,render,health,!!branch);ctx.restore();
+      } else if (enemy.type === 'boss_architect' || enemy.type === 'boss_carrier' || enemy.type === 'boss_scout' || enemy.type === 'boss_railgun' || enemy.type === 'boss_citadel' || enemy.type === 'citadel_generator') {
+        ctx.save(); ctx.translate(drawX, drawY); ctx.rotate(trans.rotation);if(strike>0)ctx.scale(attackScale,attackScale);
         this._drawBossHullHealth(ctx, enemy.type, render, health, armorOpen || 0); ctx.restore();
       } else if (health.current < health.max) {
-        this._drawHealthBar(ctx, trans.x, trans.y - render.radius - 8, render.radius * 2, health.current, health.max);
+        this._drawHealthBar(ctx, drawX, drawY - render.radius - 8, render.radius * 2, health.current, health.max);
       }
+    }
+  }
+
+  _drawRailgunShields(ctx,world) {
+    if(!this.railgunShieldVisual||world.inMenu||world.isGameOver) return;
+    for(const id of world.getEntitiesWith(RailgunComponent,TransformComponent,RenderComponent,HealthComponent)) {
+      const rail=world.getComponent(id,RailgunComponent);
+      if(getRailgunShieldHealth(rail)<=0||world.getComponent(id,HealthComponent).current<=0) continue;
+      const source=world.getComponent(id,TransformComponent);
+      ctx.save();ctx.translate(source.x,source.y);ctx.rotate(source.rotation);
+      this.railgunShieldVisual.draw(ctx,world.getComponent(id,RenderComponent),rail);ctx.restore();
+    }
+  }
+
+  _drawFractalEffects(ctx,world,linksOnly=false) {
+    if (!this.fractalChargeVisual || !this.fractalDischargeVisual || world.inMenu || world.isGameOver) return;
+    const tower = world.getEntitiesWith(TowerComponent,TransformComponent,CircleColliderComponent)[0];
+    for (const id of world.getEntitiesWith(FractalComponent,TransformComponent,HealthComponent)) {
+      if (world.getComponent(id,HealthComponent).current<=0 || world.destructionQueue.has(id)) continue;
+      const fractal = world.getComponent(id,FractalComponent),source = world.getComponent(id,TransformComponent),positions=[];
+      for (const part of fractal.branches) {
+        if (!part || world.getComponent(part.id,HealthComponent)!==part.health || part.health.current<=0 || world.destructionQueue.has(part.id)) continue;
+        if (!world.getComponent(part.id,FractalBranchComponent)?.attached) continue;
+        const point=world.getComponent(part.id,TransformComponent);positions.push(point);
+        if (linksOnly) this.fractalChargeVisual.drawLink(ctx,source.x,source.y,point.x,point.y,fractal.phase==='charge');
+      }
+      if (linksOnly) continue;
+      const cfg = GameConfig.enemies.boss_fractal;
+      if (fractal.phase==='charge') this.fractalChargeVisual.draw(ctx,source.x,source.y,positions,1-fractal.phaseRemaining/cfg.chargeDuration);
+      if (fractal.phase==='firing' && tower!==undefined) {
+        const target=world.getComponent(tower,TransformComponent),radius=world.getComponent(tower,CircleColliderComponent).radius;
+        const angle=Math.atan2(target.y-source.y,target.x-source.x);
+        this.fractalDischargeVisual.draw(ctx,source.x,source.y,target.x-Math.cos(angle)*radius,target.y-Math.sin(angle)*radius,
+          fractal.phaseRemaining/cfg.beamDuration,fractal.shots);
+      }
+    }
+  }
+
+  _drawCitadelShields(ctx,world) {
+    if (!this.citadelShieldVisual || world.inMenu || world.isGameOver) return;
+    const extent = getCitadelShieldRadius()*1.08;
+    for (const id of world.getEntitiesWith(CitadelComponent,TransformComponent,HealthComponent)) {
+      if (world.destructionQueue.has(id) || world.getComponent(id,HealthComponent).current <= 0) continue;
+      const citadel = world.getComponent(id,CitadelComponent);
+      if (citadel.hullExposed) continue;
+      const mask = getCitadelGeneratorMask(world,citadel);
+      if (!mask) continue;
+      const trans = world.getComponent(id,TransformComponent);
+      if (trans.x+extent<0 || trans.y+extent<0 || trans.x-extent>world.width || trans.y-extent>world.height) continue;
+      ctx.save();ctx.translate(trans.x,trans.y);
+      this.citadelShieldVisual.draw(ctx,mask,citadel.elapsed,trans.rotation,(this.canvas?.pixelRatio||1)*(world.renderScale||1));
+      ctx.restore();
     }
   }
 
@@ -952,7 +1031,15 @@ export class RenderSystem {
       ctx.strokeStyle = render.color;
       ctx.lineWidth = 2.5;
 
-      if (type === 'boss_scout') {
+      if (type === 'boss_fractal') {
+        drawFractalCore(ctx,render,glowScale,variant);
+      } else if (type === 'fractal_branch' || type === 'fractal_fragment' || type === 'fractal_shard') {
+        drawFractalBranch(ctx,render,glowScale,variant);
+      } else if (type === 'boss_citadel') {
+        drawCitadelBody(ctx,render,glowScale,variant);
+      } else if (type === 'citadel_generator') {
+        drawCitadelGenerator(ctx,render,glowScale);
+      } else if (type === 'boss_scout') {
         drawScoutBossBody(ctx, render, glowScale);
       } else if (type === 'boss_railgun') {
         drawRailgunBody(ctx,render,glowScale,variant);

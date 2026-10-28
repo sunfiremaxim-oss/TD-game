@@ -60,7 +60,7 @@ test('successful paid and free levels replay confirmation on the existing card, 
   assert.equal(ui.upgradeCardsMap.get('damage').cardEl, card);
 });
 
-test('resizing moves the same speed controls between arena and wave slots and cleans up its listener', () => {
+test('resizing moves the same speed controls and target panel between slots and cleans up its listener', () => {
   let changes, listenerCount = 0, moves = 0;
   const query = {
     matches: true,
@@ -72,19 +72,25 @@ test('resizing moves the same speed controls between arena and wave slots and cl
   const controls = { parentElement: null };
   const slot = () => ({ appendChild(child) { moves++; child.parentElement = this; } });
   const arena = slot(), mobile = slot();
+  const target = { parentElement: null, hidden: false }, desktopTarget = slot(), mobileTarget = slot();
   const ui = Object.create(UIManager.prototype);
-  Object.assign(ui, { dom: { speedControls: controls, arenaSpeedSlot: arena, mobileSpeedSlot: mobile },
+  Object.assign(ui, { dom: { speedControls: controls, arenaSpeedSlot: arena, mobileSpeedSlot: mobile,
+    targetInfo: target, desktopTargetSlot: desktopTarget, mobileTargetSlot: mobileTarget },
     world: { gameSpeed: 2, isPaused: true }, closeVolumePopover() {} });
   ui._setupResponsiveSpeedControls();
   assert.equal(controls.parentElement, mobile);
+  assert.equal(target.parentElement, mobileTarget);
   ui._setupResponsiveSpeedControls();
   assert.equal(listenerCount, 1);
   changes();
-  assert.equal(moves, 1, 'unchanged layout does not move or clone buttons');
+  assert.equal(moves, 2, 'unchanged layout does not move or clone controls or target');
   query.matches = false; changes();
   assert.equal(controls.parentElement, arena);
+  assert.equal(target.parentElement, desktopTarget);
   query.matches = true; changes();
   assert.equal(controls.parentElement, mobile);
+  assert.equal(target.parentElement, mobileTarget);
+  assert.equal(target.hidden, false, 'resizing preserves the visible target and cached references');
   assert.deepEqual(ui.world, { gameSpeed: 2, isPaused: true });
   assert.equal(ui.dom.speedControls, controls);
   ui.destroy();

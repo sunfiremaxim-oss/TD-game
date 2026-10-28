@@ -23,6 +23,9 @@ export class ParticleSystem {
 
 
   init(world) {
+    world.eventBus.on('RAILGUN_SHIELD_HIT',event=>{
+      if (Number.isFinite(event.x)&&Number.isFinite(event.y)) this._spawnDamageSparks(event.x,event.y,'#8ceaff',event.broken?9:3);
+    });
     world.eventBus.on('RUN_CRYSTALS_CHANGED', event => {
       if (event.source !== 'kill' || !Number.isFinite(event.x) || !Number.isFinite(event.y)) return;
       // A separate row with the same velocity keeps both rewards apart throughout their flight.

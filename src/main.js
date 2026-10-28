@@ -6,6 +6,7 @@
 
 import { World } from './core/World.js';
 import { GameConfig } from './config/GameConfig.js';
+import { getStage } from './config/StageConfig.js';
 
 // Components
 import { TransformComponent } from './components/TransformComponent.js';
@@ -23,26 +24,28 @@ import { EnemyComponent } from './components/EnemyComponent.js';
 import { ProjectileComponent } from './components/ProjectileComponent.js';
 
 // Systems
-import { MovementSystem } from './systems/MovementSystem.js?v=3.04';
-import { CarrierAISystem } from './systems/CarrierAISystem.js?v=3.04';
-import { RailgunAISystem } from './systems/RailgunAISystem.js?v=3.04';
-import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=3.04';
-import { TargetingSystem } from './systems/TargetingSystem.js?v=3.04';
-import { SniperAISystem } from './systems/SniperAISystem.js?v=3.04';
-import { WeaponSystem } from './systems/WeaponSystem.js?v=3.04';
-import { CollisionSystem } from './systems/CollisionSystem.js?v=3.04';
-import { DamageSystem } from './systems/DamageSystem.js?v=3.04';
-import { WaveSystem } from './systems/WaveSystem.js?v=3.04';
-import { EconomySystem } from './systems/EconomySystem.js?v=3.04';
-import { ParticleSystem } from './systems/ParticleSystem.js?v=3.04';
-import { AudioSystem } from './systems/AudioSystem.js?v=3.04';
-import { RenderSystem } from './systems/RenderSystem.js?v=3.04';
+import { MovementSystem } from './systems/MovementSystem.js?v=3.15';
+import { CarrierAISystem } from './systems/CarrierAISystem.js?v=3.15';
+import { RailgunAISystem } from './systems/RailgunAISystem.js?v=3.15';
+import { CitadelAISystem } from './systems/CitadelAISystem.js?v=3.15';
+import { FractalAISystem } from './systems/FractalAISystem.js?v=3.15';
+import { PhysicsSeparationSystem } from './systems/PhysicsSeparationSystem.js?v=3.15';
+import { TargetingSystem } from './systems/TargetingSystem.js?v=3.15';
+import { SniperAISystem } from './systems/SniperAISystem.js?v=3.15';
+import { WeaponSystem } from './systems/WeaponSystem.js?v=3.15';
+import { CollisionSystem } from './systems/CollisionSystem.js?v=3.15';
+import { DamageSystem } from './systems/DamageSystem.js?v=3.15';
+import { WaveSystem } from './systems/WaveSystem.js?v=3.15';
+import { EconomySystem } from './systems/EconomySystem.js?v=3.15';
+import { ParticleSystem } from './systems/ParticleSystem.js?v=3.15';
+import { AudioSystem } from './systems/AudioSystem.js?v=3.15';
+import { RenderSystem } from './systems/RenderSystem.js?v=3.15';
 
 // Managers & UI
-import { UpgradeManager } from './managers/UpgradeManager.js?v=3.04';
+import { UpgradeManager } from './managers/UpgradeManager.js?v=3.15';
 import { PlayerProgress } from './managers/PlayerProgress.js';
-import { UIManager } from './ui/UIManager.js?v=3.04';
-import { DevTools } from './ui/DevTools.js?v=3.04';
+import { UIManager } from './ui/UIManager.js?v=3.15';
+import { DevTools } from './ui/DevTools.js?v=3.15';
 
 class GameApp {
   constructor() {
@@ -232,6 +235,8 @@ class GameApp {
     this.world.registerSystem(new MovementSystem());
     this.world.registerSystem(new PhysicsSeparationSystem());
     this.world.registerSystem(new RailgunAISystem());
+    this.world.registerSystem(new CitadelAISystem());
+    this.world.registerSystem(new FractalAISystem());
     this.world.registerSystem(new TargetingSystem());
     this.world.registerSystem(new SniperAISystem());
     this.world.registerSystem(new WeaponSystem());
@@ -278,6 +283,8 @@ class GameApp {
     this.world.eventBus.on('RESTART_GAME', () => {
       this.restartGame();
     });
+    this.world.eventBus.on('NEXT_STAGE', () => this.startNextStage());
+    this.world.eventBus.on('VICTORY_UPGRADES', () => this.openVictoryUpgrades());
     this.devTools?.destroy();
     this.devTools = GameConfig.devTools.enabled ? new DevTools(this) : null;
   }
@@ -334,8 +341,29 @@ class GameApp {
     this._resizeCanvas();
   }
 
-  restartGame() {
-    const stage = this.world.stageId || this.uiManager.selectedStage || 1;
+  openVictoryUpgrades() {
+    if (!this.world.isGameOver || this.world.inMenu || this.world.runOutcome!=='victory') return false;
+    const next=getStage((this.world.stageId||0)+1);
+    const available=next && this.playerProgress.isStageUnlocked(next.id) ? next.id : null;
+    this.returnToMenu();
+    if (available) this.uiManager.selectedStage=available;
+    this.uiManager.betweenStageId=available;
+    this.uiManager._updateBetweenStage();
+    this.uiManager._updateStageSelection();
+    this.uiManager.switchMenuPage('upgrades');
+    return true;
+  }
+
+  startNextStage() {
+    const current = getStage(this.world.stageId), next = current && getStage(current.id + 1);
+    if (!this.world.isGameOver || this.world.inMenu || this.world.runOutcome !== 'victory' ||
+        !next || !this.playerProgress.isStageUnlocked(next.id)) return false;
+    this.uiManager.selectedStage = next.id;
+    this.restartGame(next.id);
+    return true;
+  }
+
+  restartGame(stage = this.world.stageId || this.uiManager.selectedStage || 1) {
     this.gameState = 'PLAYING';
     this.world.inMenu = false;
     this.world.isPaused = false;
@@ -430,6 +458,7 @@ class GameApp {
     const target = this.world.getComponent(towerId, TargetComponent);
     if (target) {
       target.targetEntityId = null;
+      target.contactTargetId = null;target.contactTargetHealth = null;
     }
     this.world.addComponent(towerId, new DefenseComponent());
     this.upgradeManager.applyAll(this.world, towerId);

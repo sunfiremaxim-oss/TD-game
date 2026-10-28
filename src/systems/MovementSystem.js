@@ -18,6 +18,10 @@ import { CarrierComponent } from '../components/CarrierComponent.js';
 import { getCarrierOrbitRadius } from '../combat/CarrierMechanics.js';
 import { RailgunComponent } from '../components/RailgunComponent.js';
 import { getRailgunOrbitRadius } from '../combat/RailgunMechanics.js';
+import { CitadelComponent, CitadelGeneratorComponent } from '../components/CitadelComponent.js';
+import { getCitadelStopRadius, isCitadelProtected } from '../combat/CitadelMechanics.js';
+import { FractalComponent, FractalBranchComponent } from '../components/FractalComponent.js';
+import { getFractalStopRadius } from '../combat/FractalMechanics.js';
 
 export class MovementSystem {
   constructor() {
@@ -88,7 +92,7 @@ export class MovementSystem {
       enemyComp.knockbackCooldown = Math.max(0, enemyComp.knockbackCooldown - deltaTime);
 
       // Boss shield segments are locked to boss orbit, do not march independently
-      if (enemyComp.type === 'boss_shield') {
+      if (enemyComp.type === 'boss_shield' || world.hasComponent(id,CitadelGeneratorComponent) || world.getComponent(id,FractalBranchComponent)?.attached) {
         velocity.vx = 0;
         velocity.vy = 0;
         continue;
@@ -125,6 +129,21 @@ export class MovementSystem {
       const col = world.getComponent(id, CircleColliderComponent);
       const enemyRadius = col ? col.radius : 12;
       const stopDist = towerRadius + enemyRadius;
+
+      if (world.hasComponent(id,FractalComponent)) {
+        const stop = getFractalStopRadius(towerRadius,currentTowerRange);
+        const speed = deltaTime>0 ? Math.max(-velocity.currentSpeed,Math.min(velocity.currentSpeed,(dist-stop)/deltaTime)) : 0;
+        velocity.vx = dist>0 ? dx/dist*speed : 0;velocity.vy = dist>0 ? dy/dist*speed : 0;
+        continue;
+      }
+
+      if (world.hasComponent(id,CitadelComponent)) {
+        const stop = getCitadelStopRadius(towerRadius,currentTowerRange,isCitadelProtected(world,id));
+        const speed = deltaTime>0 ? Math.max(-velocity.currentSpeed,Math.min(velocity.currentSpeed,(dist-stop)/deltaTime)) : 0;
+        velocity.vx = dist>0 ? dx/dist*speed : 0;
+        velocity.vy = dist>0 ? dy/dist*speed : 0;
+        continue;
+      }
 
       const carrier = world.getComponent(id, CarrierComponent);
       const rail = world.getComponent(id, RailgunComponent);
@@ -359,11 +378,14 @@ export class MovementSystem {
             const dx = targetTrans.x - trans.x;
             const dy = targetTrans.y - trans.y;
             const dist = Math.hypot(dx, dy);
-            if (dist > 1) {
-              velocity.vx = (dx / dist) * velocity.currentSpeed;
-              velocity.vy = (dy / dist) * velocity.currentSpeed;
+            if (dist > 1e-9) {
+              // Arrive at tiny targets instead of oscillating across them at x3.
+              // Keep the configured flight speed intact for the next homing step.
+              const stepSpeed = deltaTime>0 ? Math.min(velocity.currentSpeed,dist/deltaTime) : velocity.currentSpeed;
+              velocity.vx = (dx / dist) * stepSpeed;
+              velocity.vy = (dy / dist) * stepSpeed;
               trans.rotation = Math.atan2(dy, dx);
-            }
+            } else {velocity.vx=0;velocity.vy=0;}
           }
         }
       }
@@ -416,6 +438,13 @@ export class MovementSystem {
     for (const id of allProjectiles) {
       const trans = world.getComponent(id, TransformComponent);
       if (trans.x < -80 || trans.x > world.width + 80 || trans.y < -80 || trans.y > world.height + 80) {
+        const projectile = world.getComponent(id,ProjectileComponent);
+        const target = projectile.targetEntityId;
+        // The range-edge boss can be outside the viewport after range upgrades.
+        // Keep its live homing shots; their finite lifetime still bounds cleanup.
+        if (projectile.isHeavyPlasma) continue; // Finite TTL; it may start outside a narrow viewport.
+        if (!projectile.isEnemy && (world.hasComponent(target,RailgunComponent) || world.hasComponent(target,CitadelComponent) || world.hasComponent(target,CitadelGeneratorComponent) || world.hasComponent(target,FractalComponent) || world.hasComponent(target,FractalBranchComponent)) &&
+            !world.destructionQueue.has(target) && world.getComponent(target,HealthComponent)?.current>0) continue;
         world.destroyEntity(id);
       }
     }

@@ -8,11 +8,11 @@
   <title>Geometric Neon Cyberpunk - Tower Defense ECS</title>
   <link rel="preload" href="fonts/wdxl-lubrifont-sc-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/wdxl-lubrifont-sc-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="css/fonts.css?v=3.04">
-  <link rel="stylesheet" href="css/style.css?v=3.04">
-  <link rel="stylesheet" href="css/battle.css?v=3.04">
-  <link rel="stylesheet" href="css/menu.css?v=3.04">
-  <link rel="stylesheet" href="css/devtools.css?v=3.04">
+  <link rel="stylesheet" href="css/fonts.css?v=3.15">
+  <link rel="stylesheet" href="css/style.css?v=3.15">
+  <link rel="stylesheet" href="css/battle.css?v=3.15">
+  <link rel="stylesheet" href="css/menu.css?v=3.15">
+  <link rel="stylesheet" href="css/devtools.css?v=3.15">
 </head>
 <body>
   <div id="game-app" class="in-menu battle-layout">
@@ -65,6 +65,7 @@
         </section>
         <section id="menu-page-upgrades" class="menu-page command-upgrades hidden" data-scrollable aria-label="Постоянные улучшения">
           <header class="command-page-heading"><span class="command-eyebrow">РАЗВИТИЕ ЯДРА</span><h2>Постоянные улучшения</h2><p>Усиления, которые останутся с вами в следующих боях.</p></header>
+          <div id="menu-between-levels" class="between-levels" hidden><span id="between-levels-label"></span><button id="btn-upgrades-next-stage" class="result-action primary" type="button">НАЧАТЬ УРОВЕНЬ</button></div>
           <p class="meta-upgrade-note">Открывайте тиры по порядку. Доступ действует в бою и постоянной прокачке; уровни покупаются отдельно.</p>
           <div class="permanent-upgrade-layout">
           <div class="permanent-upgrade-controls">
@@ -197,8 +198,17 @@
             <div class="intel-icon-box sniper-box"><canvas class="intel-canvas" data-enemy="boss_railgun" width="120" height="120"></canvas></div>
             <div class="intel-info">
               <div class="intel-name-row"><span class="intel-name sniper-color">БОСС «ПАРАЛЛАКС»</span><span class="intel-badge sniper-badge">ФИНАЛ СТАДИИ</span></div>
-              <p class="intel-desc">Босс четвёртого уровня. Держится на дистанции в пределах дальности башни. Замирает, накапливает заряд 1.6 секунды и наносит мощный лучевой удар. После выстрела охлаждается 1.1 секунды, получая на 35% больше урона, затем смещается вокруг башни.</p>
-              <div class="intel-tip">СОВЕТ: Запас HP и броня помогают выдержать выстрел, а урон и скорость атаки позволяют использовать окно охлаждения.</div>
+              <p class="intel-desc">Босс четвёртого уровня. Держится у края зоны атаки башни. Замирает, накапливает заряд 1.6 секунды и наносит мощный лучевой удар. Затем сразу меняет позицию, прикрываясь энергетическим щитом прочностью 8% от своего максимального HP. Сначала урон поглощает щит, после пробития — корпус. При остановке отключает щит и завершает охлаждение.</p>
+              <div class="intel-tip">СОВЕТ: Запас HP и броня помогают выдержать выстрел. Урон и скорость атаки позволяют быстрее пробить щит; корпус получает обычный урон во всех фазах.</div>
+            </div>
+          </div>
+
+          <div class="intel-card boss-card" data-enemy-card="boss_citadel" hidden>
+            <div class="intel-icon-box aegis-box"><canvas class="intel-canvas" data-enemy="boss_citadel" width="120" height="120"></canvas></div>
+            <div class="intel-info">
+              <div class="intel-name-row"><span class="intel-name aegis-color">БОСС «ЦИТАДЕЛЬ»</span><span class="intel-badge aegis-badge">ФИНАЛ СТАДИИ</span></div>
+              <p class="intel-desc">Босс пятого уровня. Шесть генераторов поддерживают сотовый энергетический купол вокруг вращающегося шестиугольного корпуса. Пока работает хотя бы один, корпус неуязвим. Уничтоженные генераторы не восстанавливаются. После уничтожения всех шести открывается основной корпус. Атакует тяжёлыми плазменными зарядами.</p>
+              <div class="intel-tip">СОВЕТ: Вращение выводит генераторы под огонь башни. Мультивыстрел и рикошеты помогают быстрее снять защиту, а HP и броня — пережить плазменные заряды.</div>
             </div>
           </div>
 
@@ -230,6 +240,15 @@
               </div>
               <p class="intel-desc">При уничтожении распадается на 3 осколка. Сначала они разлетаются назад и в стороны, затем устремляются к ядру.</p>
               <div class="intel-tip">СОВЕТ: Не подпускайте к ядру — взрыв роя в упор крайне опасен.</div>
+            </div>
+          </div>
+
+          <div class="intel-card boss-card" data-enemy-card="boss_fractal" hidden>
+            <div class="intel-icon-box splitter-box"><canvas class="intel-canvas" data-enemy="boss_fractal" width="120" height="120"></canvas></div>
+            <div class="intel-info">
+              <div class="intel-name-row"><span class="intel-name splitter-color">БОСС «ФРАКТАЛ»</span><span class="intel-badge splitter-badge">ФИНАЛ СТАДИИ</span></div>
+              <p class="intel-desc">Босс шестого уровня. Ветвящаяся структура из уменьшенных копий самой себя. При потере половины HP крупная ветвь отделяется и атакует башню при контакте. Ядро собирает энергию и наносит электрический удар; каждая отделённая ветвь ослабляет его разряд. Уничтоженная ветвь распадается на три фрагмента, каждый из которых делится ещё на три малых. После гибели ядра оставшиеся ветви отделяются. Для победы уничтожьте все части.</p>
+              <div class="intel-tip">СОВЕТ: Мультивыстрел и рикошеты помогают разобрать ветви и осколки. HP и броня позволяют пережить разряды, пока атака босса ещё сильна.</div>
             </div>
           </div>
 
@@ -295,12 +314,20 @@
             <div class="wave-details">
               <div class="wave-heading"><span id="hud-wave">Волна 1:</span><span id="hud-enemies">Враги 0</span></div>
               <div class="wave-bar-bg"><div id="hud-wave-fill"></div></div>
+              <div id="mobile-target-slot"></div>
               <div id="intermission-container" class="hidden">
                 <span id="intermission-text">СЛЕДУЮЩАЯ ВОЛНА ЧЕРЕЗ 5.0с</span>
                 <div class="intermission-bar-bg"><div id="intermission-bar"></div></div>
               </div>
             </div>
             <div id="mobile-speed-slot"></div>
+          </div>
+          <div class="target-status" id="desktop-target-slot">
+            <aside id="target-info" class="target-info" hidden aria-label="Текущая цель">
+              <div class="target-info-heading"><span>ЦЕЛЬ:</span><strong id="target-name"></strong></div>
+              <div class="target-info-stats"><span>HP <b id="target-hp" class="target-full-value"></b><b id="target-hp-compact" class="target-compact-value"></b></span><span>УРОН <b id="target-damage" class="target-full-value"></b><b id="target-damage-compact" class="target-compact-value"></b></span></div>
+              <div class="target-hp-track"><i id="target-hp-fill"></i></div>
+            </aside>
           </div>
         </div>
       </section>
@@ -354,7 +381,7 @@
 
           <div class="help-section">
             <h3 class="help-heading">🎯 АВТОМАТИЧЕСКОЕ НАВЕДЕНИЕ</h3>
-            <p>Башня выбирает ближайшего врага, которому ещё нужен урон. Ствол заранее сопровождает врагов за пределами дальности атаки, а стрельба начинается при входе в радиус. Если летящих пуль уже достаточно для уничтожения цели, башня переключается на следующую.</p>
+            <p>Башня заранее наводится на ближайшего врага и стреляет при входе в радиус атаки. Враг, добравшийся до башни, удерживается в прицеле до уничтожения или выхода из радиуса. Остальные выстрелы мультивыстрела могут поражать соседние цели. HP и урон выбранного врага показаны на панели цели.</p>
           </div>
 
           <div class="help-section">
@@ -406,19 +433,24 @@
 
     <!-- GAME OVER MODAL -->
     <div id="modal-gameover" class="modal-backdrop hidden">
-      <div data-scrollable class="modal-content">
-        <h2 id="result-title" class="modal-title">СИСТЕМА СБИТА</h2>
-        <div class="modal-body">
+      <section data-scrollable class="result-panel" role="dialog" aria-modal="true" aria-labelledby="result-title" aria-describedby="result-description">
+        <header class="result-header">
+          <span class="result-emblem" aria-hidden="true"><svg viewBox="0 0 80 80" fill="none"><path d="M40 5 70 22v36L40 75 10 58V22Z"/><path d="m40 15 21 12v26L40 65 19 53V27Z"/><path class="result-emblem-check" d="m27 40 9 9 18-19"/><path class="result-emblem-cross" d="m30 30 20 20m0-20L30 50"/></svg></span>
+          <div><span class="result-eyebrow">ПРОТОКОЛ ОБОРОНЫ</span><h2 id="result-title">СИСТЕМА СБИТА</h2></div>
+        </header>
+        <div class="result-body">
           <p id="result-description">Центральное ядро уничтожено роем.</p>
-          <p>Достигнутый рубеж: <span id="modal-final-wave">ВОЛНА 01</span></p>
+          <div class="result-progress"><span>ИТОГ БОЯ</span><strong id="modal-final-wave">ВОЛНА 01</strong></div>
+          <div class="gameover-crystal-reward"><div class="result-reward-heading"><span>МИКРОЧИПЫ ЗА БОЙ</span><div class="chip-amount"><strong id="gameover-crystals">+0</strong><span class="chip-icon" aria-hidden="true"></span></div></div><span class="result-wallet">В кошельке: <b id="gameover-crystal-balance">0</b></span></div>
           <p id="result-unlock" hidden></p>
-          <div class="gameover-crystal-reward"><span>МИКРОЧИПЫ ЗА БОЙ</span><div class="chip-amount"><strong id="gameover-crystals">+0</strong><span class="chip-icon" aria-hidden="true"></span></div><span>В кошельке: <b id="gameover-crystal-balance">0</b></span></div>
         </div>
-        <div class="modal-buttons-row">
-          <button id="btn-restart" class="modal-btn">ПЕРЕЗАПУСТИТЬ</button>
-          <button id="btn-gameover-menu" class="modal-btn secondary-btn">В ГЛАВНОЕ МЕНЮ</button>
+        <div class="result-actions">
+          <button id="btn-next-stage" class="result-action primary" type="button" hidden>СЛЕДУЮЩИЙ УРОВЕНЬ</button>
+          <button id="btn-victory-upgrades" class="result-action" type="button" hidden>ПОСТОЯННЫЕ УЛУЧШЕНИЯ</button>
+          <button id="btn-restart" class="result-action primary" type="button">ПЕРЕЗАПУСТИТЬ</button>
+          <button id="btn-gameover-menu" class="result-action" type="button">В ГЛАВНОЕ МЕНЮ</button>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 
@@ -432,6 +464,6 @@
   </div>
 
   <!-- ENTRY MODULE -->
-  <script type="module" src="src/main.js?v=3.04"></script>
+  <script type="module" src="src/main.js?v=3.15"></script>
 </body>
 </html>

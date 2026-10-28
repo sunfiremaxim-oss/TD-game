@@ -13,6 +13,11 @@ import { DefenseComponent } from '../components/DefenseComponent.js';
 import { CircleColliderComponent } from '../components/CircleColliderComponent.js';
 import { DevControlComponent } from '../components/DevControlComponent.js';
 import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
+import { RailgunComponent } from '../components/RailgunComponent.js';
+import { getRailgunShieldHealth } from '../combat/RailgunMechanics.js';
+import { CitadelGeneratorComponent } from '../components/CitadelComponent.js';
+import { FractalBranchComponent } from '../components/FractalComponent.js';
+import { detachFractalBranch, detachFractalChildren } from '../combat/FractalMechanics.js';
 
 import { calculateMitigatedDamage } from '../combat/DamageCalculation.js?v=2.7';
 
@@ -85,10 +90,24 @@ export class DamageSystem {
     // Mitigate DPS once, then apply a time slice: flat armor and minimum damage
     // must not become stronger or weaker just because the attack has more ticks.
     const damageScale = context?.damageScale ?? 1;
-    const netDamage = calculateMitigatedDamage(world, targetId, rawDamage) * damageScale;
+    let netDamage = calculateMitigatedDamage(world, targetId, rawDamage) * damageScale;
+    if (netDamage <= 0) return;
+    const rail = world.getComponent(targetId,RailgunComponent);
+    const shield = getRailgunShieldHealth(rail);
+    if (shield>0) {
+      const absorbed = Math.min(shield,netDamage);
+      rail.shieldHp = Math.max(0,shield-absorbed); rail.shieldHitRemaining = .16;
+      netDamage -= absorbed;
+      const position = world.getComponent(targetId,TransformComponent);
+      world.eventBus.emit('RAILGUN_SHIELD_HIT',{entityId:targetId,absorbed,remaining:rail.shieldHp,
+        broken:rail.shieldHp<=0,x:hitX??position?.x,y:hitY??position?.y});
+      if (netDamage<=0) return; // Shield hits do not count as hull damage or life steal.
+    }
 
     const actualDamage = Math.min(health.current, netDamage);
     health.current = Math.max(0, health.current - netDamage);
+    const fractalBranch = world.getComponent(targetId,FractalBranchComponent);
+    if (fractalBranch?.attached && health.current <= health.max*GameConfig.enemies.boss_fractal.detachHealthFraction) detachFractalBranch(world,targetId);
 
     // Get position for particle/text feedback
     const trans = world.getComponent(targetId, TransformComponent);
@@ -124,6 +143,7 @@ export class DamageSystem {
     if (health.current <= 0) {
       health.current = 0;
       const enemyComp = world.getComponent(targetId, EnemyComponent);
+      if (enemyComp?.type === 'boss_fractal') detachFractalChildren(world,targetId);
 
       world.eventBus.emit('ENTITY_DIED', {
         entityId: targetId,
@@ -206,7 +226,7 @@ export class DamageSystem {
   _applyKnockback(world, towerId, targetId) {
     const defense = world.getComponent(towerId, DefenseComponent);
     const enemy = world.getComponent(targetId, EnemyComponent);
-    if (!defense || defense.knockbackChance <= 0 || !enemy || enemy.type === 'boss_shield' ||
+    if (!defense || defense.knockbackChance <= 0 || !enemy || enemy.type === 'boss_shield' || world.hasComponent(targetId,CitadelGeneratorComponent) || world.getComponent(targetId,FractalBranchComponent)?.attached ||
         enemy.knockbackCooldown > 0 || Math.random() >= defense.knockbackChance) return;
     const origin = world.getComponent(towerId, TransformComponent);
     const target = world.getComponent(targetId, TransformComponent);

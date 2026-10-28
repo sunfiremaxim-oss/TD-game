@@ -1,5 +1,5 @@
 import { GameConfig } from '../config/GameConfig.js';
-import { getStage } from '../config/StageConfig.js';
+import { STAGES, getStage } from '../config/StageConfig.js';
 import { DevControlComponent } from '../components/DevControlComponent.js';
 import { TowerComponent } from '../components/TowerComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
@@ -9,13 +9,15 @@ import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { TransformComponent } from '../components/TransformComponent.js';
 import { TargetComponent } from '../components/TargetComponent.js';
 import { AttackComponent } from '../components/AttackComponent.js';
+import { CitadelComponent } from '../components/CitadelComponent.js';
+import { FractalComponent } from '../components/FractalComponent.js';
 import { i18n, t } from '../i18n/I18n.js';
 
 export const DEV_DESKTOP_QUERY = '(min-width: 1101px) and (min-height: 601px) and (hover: hover) and (pointer: fine)';
 const DEV_ENEMIES = {
   scout: 'СКАУТ', fighter: 'ИСТРЕБИТЕЛЬ', tank: 'ТАНК', sniper: 'СНАЙПЕР',
   aegis: 'ПЕНТАГОН «ЭГИДА»', splitter: 'ФРАКТАЛ «СПЛИТТЕР»',
-  blinker: 'ВЕКТОР «БЛИНКЕР»', boss_scout: 'БОСС «ИМПУЛЬС»', boss_architect: 'БОСС «МОНОЛИТ»', boss_carrier: 'БОСС «ДИРИЖЁР»', boss_railgun: 'БОСС «ПАРАЛЛАКС»'
+  blinker: 'ВЕКТОР «БЛИНКЕР»', boss_scout: 'БОСС «ИМПУЛЬС»', boss_architect: 'БОСС «МОНОЛИТ»', boss_carrier: 'БОСС «ДИРИЖЁР»', boss_railgun: 'БОСС «ПАРАЛЛАКС»', boss_citadel: 'БОСС «ЦИТАДЕЛЬ»', boss_fractal: 'БОСС «ФРАКТАЛ»'
 };
 
 /** Temporary desktop rail. Cheats are session-only; progress reset is explicit. */
@@ -49,6 +51,8 @@ export class DevTools {
         <fieldset><legend>${text('Текущий бой')}</legend>
           <div class="dev-row">${button('heal', 'HP 100%')}${button('half-health', 'HP 50%')}</div>
           <div class="dev-row">${button('credits-small', '+1 000 ◈')}${button('credits-large', '+10 000 ◈')}</div>
+          <div class="dev-row"><input id="dev-stage" type="number" min="1" max="${STAGES.length}" step="1" value="${this.world.stageId || app.uiManager.selectedStage || 1}" aria-label="${t('Номер уровня')}">${button('stage', 'Перейти к уровню')}</div>
+          <p class="dev-note">${text('Начинает новый бой. Постоянный прогресс не меняется.')}</p>
           <div class="dev-row"><input id="dev-wave" type="number" min="1" max="200" step="1" value="10" aria-label="${t('Номер волны')}">${button('wave', 'Перейти к волне')}</div>
           <div class="dev-row">${button('next-wave', 'Следующая волна')}${button('clear', 'Очистить поле')}</div>
         </fieldset>
@@ -75,7 +79,7 @@ export class DevTools {
       </div>`;
     document.getElementById('game-viewport').prepend(this.element);
     const get = id => this.element.querySelector(`#dev-${id}`);
-    this.dom = Object.fromEntries(['collapse', 'pause', 'status', 'speed', 'invulnerable', 'fire', 'waves', 'wave', 'enemy', 'count', 'distance', 'side'].map(id => [id, get(id)]));
+    this.dom = Object.fromEntries(['collapse', 'pause', 'status', 'speed', 'invulnerable', 'fire', 'waves', 'stage', 'wave', 'enemy', 'count', 'distance', 'side'].map(id => [id, get(id)]));
     this.body = this.element.querySelector('.dev-body');
     this.labels = [...this.element.querySelectorAll('[data-dev-text]')];
     this.controls = [...this.body.querySelectorAll('button, input, select')];
@@ -137,6 +141,7 @@ export class DevTools {
     this.dom.collapse.title = t('F2 — свернуть панель');
     this.dom.speed.setAttribute('aria-label', t('Скорость'));
     this.dom.wave.setAttribute('aria-label', t('Номер волны'));
+    this.dom.stage.setAttribute('aria-label', t('Номер уровня'));
     this.dom.enemy.setAttribute('aria-label', t('Тип врага'));
     this.dom.side.setAttribute('aria-label', t('Сторона появления'));
     this.refresh();
@@ -154,7 +159,9 @@ export class DevTools {
     this.dom.waves.checked = !this.flags.wavesFrozen;
     if (document.activeElement !== this.dom.speed) this.dom.speed.value = String(this.world.gameSpeed);
     const count = this._aliveCount();
-    const label = t('Волна {wave} · На поле: {count}', { wave: this.app.waveSystem.currentWave, count });
+    const stage = getStage(this.world.stageId);
+    const values = { stage: stage?.id, wave: this.app.waveSystem.currentWave, count };
+    const label = t(stage ? 'Уровень {stage} · Волна {wave} · На поле: {count}' : 'Песочница · Волна {wave} · На поле: {count}', values);
     if (this.dom.status.textContent !== label) this.dom.status.textContent = label;
   }
 
@@ -176,6 +183,7 @@ export class DevTools {
     else if (action === 'credits-small') this.addCredits(1000);
     else if (action === 'credits-large') this.addCredits(10000);
     else if (action === 'clear') this.clearField();
+    else if (action === 'stage') return this.jumpStage(Number(this.dom.stage.value));
     else if (action === 'wave') this.jumpWave(Number(this.dom.wave.value));
     else if (action === 'next-wave') this.jumpWave(this.app.waveSystem.currentWave + 1);
     else if (action === 'spawn') this.spawn(this.dom.enemy.value, Number(this.dom.count.value), Number(this.dom.distance.value), this.dom.side.value);
@@ -234,7 +242,7 @@ export class DevTools {
     for (const id of this.world.getEntitiesWith(ProjectileComponent)) this.world.destroyEntity(id);
     this.world._flushDestructionQueue();
     const target = this.world.getComponent(this._tower(), TargetComponent);
-    if (target) target.targetEntityId = null;
+    if (target) {target.targetEntityId = null;target.contactTargetId=null;target.contactTargetHealth=null;}
     this.app.particleSystem?.reset();
   }
 
@@ -247,6 +255,14 @@ export class DevTools {
     this.flags.wavesFrozen = true;
     this.world.eventBus.emit('WAVE_STARTED', { wave: waves.currentWave, totalEnemies: 0 });
     this._progress();
+    return true;
+  }
+
+  jumpStage(value) {
+    if (!this._canUse() || !getStage(value)) return false;
+    // Debug entry bypasses campaign locks, never grants persistent unlocks.
+    this.app.restartGame(value);
+    this.refresh();
     return true;
   }
 
@@ -283,6 +299,11 @@ export class DevTools {
     const x = tower.x + Math.cos(angle) * distance, y = tower.y + Math.sin(angle) * distance;
     const dx = x - transform.x, dy = y - transform.y;
     transform.x = x; transform.y = y;
+    const attachments = this.world.getComponent(id,CitadelComponent)?.generators || this.world.getComponent(id,FractalComponent)?.branches || [];
+    for (const part of attachments) {
+      const module = this.world.getComponent(part.id,TransformComponent);
+      if (module) { module.x += dx; module.y += dy; }
+    }
     for (const shield of this.world.getComponent(id, EnemyComponent).shieldIds || []) {
       const segment = this.world.getComponent(shield, TransformComponent);
       if (segment) { segment.x += dx; segment.y += dy; }

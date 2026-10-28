@@ -158,10 +158,10 @@ export class AegisShieldVisual {
     return texture;
   }
 
-  draw(ctx, x, y, radius, time, pixelScale = 1, phase = 0, emitterRotation = 0) {
+  draw(ctx, x, y, radius, time, pixelScale = 1, phase = 0, emitterRotation = 0, intensity = 1) {
     const texture = this._getTexture(radius, pixelScale);
     const extent = radius * 1.08;
-    const pulse = 0.80 + Math.sin(time * 1.8 + phase) * 0.12;
+    const pulse = Math.min(1, (0.80 + Math.sin(time * 1.8 + phase) * 0.12) * intensity);
     const cycle = time / AEGIS_SHIMMER.period + phase / (Math.PI * 2);
     const position = ((cycle % 1 + 1) % 1) * AEGIS_SHIMMER.frames;
     const first = Math.floor(position);

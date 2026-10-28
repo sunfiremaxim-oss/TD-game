@@ -15,6 +15,8 @@ import { RenderComponent } from '../components/RenderComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
 import { ArchitectDrillComponent } from '../components/ArchitectDrillComponent.js';
 import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
+import { isCombatTargetAvailable } from '../combat/CitadelMechanics.js';
+import { canEnemyMelee } from '../combat/ContactTargeting.js';
 
 export class CollisionSystem {
   update(world, deltaTime) {
@@ -47,7 +49,7 @@ export class CollisionSystem {
         let hit = false;
         for (const enemyId of enemies) {
           const enemyHealth = world.getComponent(enemyId, HealthComponent);
-          if (enemyHealth.current <= 0 || world.destructionQueue.has(enemyId) || proj.hitTargets?.has(enemyHealth)) continue;
+          if (enemyHealth.current <= 0 || world.destructionQueue.has(enemyId) || proj.hitTargets?.has(enemyHealth) || !isCombatTargetAvailable(world,enemyId)) continue;
 
           const enemyTrans = world.getComponent(enemyId, TransformComponent);
           const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
@@ -106,13 +108,15 @@ export class CollisionSystem {
         if (enemyHealth.current <= 0) continue;
 
         const enemyComp = world.getComponent(enemyId, EnemyComponent);
-        if (!enemyComp || enemyComp.isSniper || enemyComp.type === 'boss_shield' || enemyComp.type === 'boss_carrier' || enemyComp.type === 'boss_railgun') continue;
+        if (enemyComp) enemyComp.meleeAttackRemaining=Math.max(0,(enemyComp.meleeAttackRemaining||0)-deltaTime);
+        if (!enemyComp) continue;
+        const drill = enemyComp.type === 'boss_architect' ? world.getComponent(enemyId, ArchitectDrillComponent) : null;
+        if (!drill && !canEnemyMelee(world,enemyId)) continue;
 
         const enemyTrans = world.getComponent(enemyId, TransformComponent);
         const enemyCol = world.getComponent(enemyId, CircleColliderComponent);
 
         const dist = Math.hypot(towerTrans.x - enemyTrans.x, towerTrans.y - enemyTrans.y);
-        const drill = enemyComp.type === 'boss_architect' ? world.getComponent(enemyId, ArchitectDrillComponent) : null;
         if (drill) {
           const cfg = GameConfig.enemies.boss_architect;
           const siege = world.getComponent(enemyId, ArchitectSiegeComponent);
@@ -141,6 +145,8 @@ export class CollisionSystem {
           // Strike the core every 1.0s while contacting
           if (enemyComp.meleeCooldown <= 0) {
             enemyComp.meleeCooldown = enemyComp.meleeInterval || 1.0;
+            enemyComp.meleeAttackRemaining = .18;
+            enemyComp.meleeAttackAngle = Math.atan2(towerTrans.y-enemyTrans.y,towerTrans.x-enemyTrans.x);
 
             world.eventBus.emit('TOWER_CONTACT', {
               enemyId,
@@ -207,7 +213,7 @@ export class CollisionSystem {
     let nearestDistance = GameConfig.combat.ricochetRadius;
     for (const id of enemies) {
       const hp = world.getComponent(id, HealthComponent);
-      if (!hp || hp.current <= 0 || world.destructionQueue.has(id) || projectile.hitTargets.has(hp)) continue;
+      if (!hp || hp.current <= 0 || world.destructionQueue.has(id) || projectile.hitTargets.has(hp) || !isCombatTargetAvailable(world,id)) continue;
       const target = world.getComponent(id, TransformComponent);
       const distance = Math.hypot(target.x - position.x, target.y - position.y);
       if (distance <= nearestDistance) { nextId = id; nextPosition = target; nearestDistance = distance; }

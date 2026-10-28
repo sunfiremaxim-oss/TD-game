@@ -6,5 +6,8 @@ export class RailgunComponent {
     this.elapsed = 0;
     this.shots = 0;
     this.orbitDirection = 1;
+    this.shieldHp = 0;
+    this.shieldMax = 0;
+    this.shieldHitRemaining = 0;
   }
 }

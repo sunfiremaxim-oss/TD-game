@@ -29,6 +29,20 @@ function setup() {
   return { ui, world, events };
 }
 
+test('next level button requests progression only from a finished victory',()=>{
+  const {ui,world,events}=setup();
+  ui.dom.btnNextStage.handlers.click();assert.equal(events.length,0);
+  world.isGameOver=true;ui.dom.btnNextStage.handlers.click();assert.equal(events.length,0);
+  world.runOutcome='victory';ui.dom.btnNextStage.handlers.click();assert.equal(events.at(-1)[0],'NEXT_STAGE');
+});
+
+test('permanent upgrades can be requested only from victory; continuation uses its unlocked stage',()=>{
+  const {ui,world,events}=setup();ui.dom.btnVictoryUpgrades.handlers.click();assert.equal(events.length,0);
+  Object.assign(world,{isGameOver:true,runOutcome:'victory',inMenu:false});ui.dom.btnVictoryUpgrades.handlers.click();assert.equal(events.at(-1)[0],'VICTORY_UPGRADES');
+  world.inMenu=true;ui.betweenStageId=3;ui.selectedStage=1;ui.playerProgress={isStageUnlocked:id=>id===3};
+  ui.dom.btnUpgradesNextStage.handlers.click();assert.equal(events.at(-1)[0],'START_GAME');assert.equal(ui.selectedStage,3);
+});
+
 test('pause menu stops combat once and blocks simulation shortcuts until explicitly resumed', () => {
   const { ui, world, events } = setup();
   ui.dom.btnToMenu.handlers.click();

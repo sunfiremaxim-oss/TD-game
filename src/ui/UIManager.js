@@ -7,6 +7,10 @@
 import { TowerComponent } from '../components/TowerComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { EconomyComponent } from '../components/EconomyComponent.js';
+import { TargetComponent } from '../components/TargetComponent.js';
+import { EnemyComponent } from '../components/EnemyComponent.js';
+import { FractalComponent } from '../components/FractalComponent.js';
+import { getLiveFractalBranchCount } from '../combat/FractalMechanics.js';
 import { getHealthRatio, getHealthColor } from '../visuals/HealthVisuals.js';
 import { AegisShieldVisual, AEGIS_SHIELD_ATTENUATION } from '../visuals/AegisShieldVisual.js';
 import { i18n, t } from '../i18n/I18n.js';
@@ -18,9 +22,20 @@ import { drawArchitectBody, drawArchitectCore } from '../visuals/ArchitectVisual
 import { drawCarrierBody } from '../visuals/CarrierVisual.js';
 import { drawBossHullHealth } from '../visuals/BossHealthVisual.js';
 import { drawScoutBossBody } from '../visuals/ScoutBossVisual.js';
-import { drawRailgunBody } from '../visuals/RailgunVisual.js';
+import { drawRailgunBody, RailgunShieldVisual } from '../visuals/RailgunVisual.js';
+import { drawCitadelBody, drawCitadelGenerator, CitadelShieldVisual, getCitadelShieldRadius } from '../visuals/CitadelVisual.js';
+import { drawFractalCore, drawFractalBranch, drawFractalHealth, FractalChargeVisual } from '../visuals/FractalVisual.js';
 
 export const COMPACT_BATTLE_QUERY = '(max-width: 1100px), (max-height: 600px)';
+const TARGET_COMPACT_NUMBER = new Intl.NumberFormat('en', { notation: 'compact', maximumSignificantDigits: 2 });
+function formatTargetNumber(value) {
+  const rounded = Math.ceil(value);
+  return rounded < 1000 ? String(rounded) : TARGET_COMPACT_NUMBER.format(rounded);
+}
+const TARGET_NAMES={scout:'СКАУТ',fighter:'ИСТРЕБИТЕЛЬ',tank:'ТАНК',sniper:'СНАЙПЕР',aegis:'ПЕНТАГОН «ЭГИДА»',
+  splitter:'ФРАКТАЛ «СПЛИТТЕР»',splitter_shard:'Осколок Сплиттера',blinker:'ВЕКТОР «БЛИНКЕР»',boss_scout:'БОСС «ИМПУЛЬС»',
+  boss_architect:'БОСС «МОНОЛИТ»',boss_carrier:'БОСС «ДИРИЖЁР»',boss_railgun:'БОСС «ПАРАЛЛАКС»',boss_citadel:'БОСС «ЦИТАДЕЛЬ»',
+  citadel_generator:'Генератор Цитадели',boss_fractal:'БОСС «ФРАКТАЛ»',fractal_branch:'Ветвь Фрактала',fractal_fragment:'Фрагмент Фрактала',fractal_shard:'Осколок Фрактала'};
 
 // Each inner array is one logical row, independent of config declaration order.
 export const UPGRADE_LAYOUT = {
@@ -113,6 +128,15 @@ export class UIManager {
       resultUnlock: document.getElementById('result-unlock'),
       finalWaveText: document.getElementById('modal-final-wave'),
       btnRestart: document.getElementById('btn-restart'),
+      btnNextStage: document.getElementById('btn-next-stage'),
+      btnVictoryUpgrades: document.getElementById('btn-victory-upgrades'),
+      betweenLevels: document.getElementById('menu-between-levels'),
+      betweenLevelsLabel: document.getElementById('between-levels-label'),
+      btnUpgradesNextStage: document.getElementById('btn-upgrades-next-stage'),
+      targetInfo: document.getElementById('target-info'),targetName: document.getElementById('target-name'),
+      desktopTargetSlot: document.getElementById('desktop-target-slot'), mobileTargetSlot: document.getElementById('mobile-target-slot'),
+      targetHp: document.getElementById('target-hp'),targetDamage: document.getElementById('target-damage'),targetHpFill: document.getElementById('target-hp-fill'),
+      targetHpCompact: document.getElementById('target-hp-compact'), targetDamageCompact: document.getElementById('target-damage-compact'),
       btnGameOverMenu: document.getElementById('btn-gameover-menu'),
 
       // Main menu & dialogs
@@ -248,6 +272,8 @@ export class UIManager {
     if (this.dom.finalWaveText) this.dom.finalWaveText.textContent = t('Волна {wave}', { wave: this.currentWave });
     this._updateStageSelection();
     this._updateResultText();
+    this._updateBetweenStage();
+    this._targetHudKey=null;this._updateTargetHUD();
     const amount = this.crystalBalance.toLocaleString(i18n.locale);
     if (this.dom.crystalBalance) this.dom.crystalBalance.textContent = amount;
     if (this.dom.gameOverCrystalBalance) this.dom.gameOverCrystalBalance.textContent = amount;
@@ -305,16 +331,25 @@ export class UIManager {
 
   _updateResultText() {
     const victory = this.world.runOutcome === 'victory';
-    if (this.dom.resultTitle) this.dom.resultTitle.textContent = t(victory ? 'СТАДИЯ ПРОЙДЕНА' : 'СИСТЕМА СБИТА');
+    if (this.dom.resultTitle) this.dom.resultTitle.textContent = t(victory ? 'ПОБЕДА' : 'СИСТЕМА СБИТА');
     if (this.dom.resultDescription) this.dom.resultDescription.textContent = t(victory ? 'Босс уничтожен. Микрочипы зачислены.' : 'Центральное ядро уничтожено роем.');
     this.dom.modalGameOver?.classList.toggle('victory', victory);
     if (this.dom.resultUnlock) {
       this.dom.resultUnlock.hidden = !victory;
-      this.dom.resultUnlock.textContent = this.world.stageId === STAGES.length ? t('Все 8 стадий пройдены!')
-        : t('Следующая стадия: {stage}', { stage: (this.world.stageId || 1) + 1 });
+      this.dom.resultUnlock.textContent = this.world.stageId === STAGES.length ? t('Все 8 уровней пройдены!')
+        : t('Следующий уровень: {stage}', { stage: (this.world.stageId || 1) + 1 });
     }
-    if (this.dom.btnRestart) this.dom.btnRestart.textContent = t(victory ? 'СЫГРАТЬ СНОВА' : 'ПЕРЕЗАПУСТИТЬ');
-    if (victory && this.dom.finalWaveText) this.dom.finalWaveText.textContent = t('Стадия {stage} · Волна {wave}', { stage: this.world.stageId, wave: this.currentWave });
+    if (this.dom.btnRestart) { this.dom.btnRestart.hidden = victory; this.dom.btnRestart.textContent = t('ПЕРЕЗАПУСТИТЬ'); }
+    const next = getStage((this.world.stageId || 0) + 1);
+    if (this.dom.btnNextStage) this.dom.btnNextStage.hidden = !(victory && next && this.playerProgress?.isStageUnlocked(next.id));
+    if (this.dom.btnVictoryUpgrades) this.dom.btnVictoryUpgrades.hidden=!victory;
+    if (victory && this.dom.finalWaveText) this.dom.finalWaveText.textContent = t('Уровень {stage} · Волна {wave}', { stage: this.world.stageId, wave: this.currentWave });
+  }
+
+  _updateBetweenStage() {
+    const stage=getStage(this.betweenStageId);
+    if(this.dom.betweenLevels)this.dom.betweenLevels.hidden=!stage;
+    if(this.dom.betweenLevelsLabel)this.dom.betweenLevelsLabel.textContent=stage?t('Следующий уровень: {stage}',{stage:stage.id}):'';
   }
 
   _updateRunExitText() {
@@ -363,6 +398,9 @@ export class UIManager {
     const menuDestination = this._speedLayoutQuery.matches ? this.dom.mobileMenuSlot : this.dom.arenaSpeedSlot;
     const menu = this.dom.arenaMenuButtons;
     if (menu && menuDestination && menu.parentElement !== menuDestination) menuDestination.appendChild(menu);
+    const targetDestination = this._speedLayoutQuery.matches ? this.dom.mobileTargetSlot : this.dom.desktopTargetSlot;
+    const target = this.dom.targetInfo;
+    if (target && targetDestination && target.parentElement !== targetDestination) targetDestination.appendChild(target);
   }
 
   _bindEvents() {
@@ -396,6 +434,17 @@ export class UIManager {
     // 5. Restart & Game Over buttons
     this.dom.btnRestart?.addEventListener('click', () => {
       this.world.eventBus.emit('RESTART_GAME');
+    });
+    this.dom.btnNextStage?.addEventListener('click', () => {
+      if (this.world.isGameOver && this.world.runOutcome === 'victory') this.world.eventBus.emit('NEXT_STAGE');
+    });
+    this.dom.btnVictoryUpgrades?.addEventListener('click',()=>{
+      if(this.world.isGameOver&&!this.world.inMenu&&this.world.runOutcome==='victory')this.world.eventBus.emit('VICTORY_UPGRADES');
+    });
+    this.dom.btnUpgradesNextStage?.addEventListener('click',()=>{
+      if(this.world.inMenu&&this.playerProgress?.isStageUnlocked(this.betweenStageId)) {
+        this.selectedStage=this.betweenStageId;this.world.eventBus.emit('START_GAME');
+      }
     });
     this.dom.btnGameOverMenu?.addEventListener('click', () => {
       this.hideGameOver();
@@ -486,6 +535,8 @@ export class UIManager {
   }
 
   reset() {
+    this.betweenStageId=null;this._updateBetweenStage();
+    this._targetHudKey=null;if(this.dom.targetInfo)this.dom.targetInfo.hidden=true;
     this.currentWave = 1;
     this._intermission = null;
     this.enemiesAlive = 0;
@@ -646,9 +697,9 @@ export class UIManager {
       this._updatePauseButton();
       this._updateResultText();
       this.dom.modalGameOver?.classList.remove('hidden');
-      if (this.dom.finalWaveText) this.dom.finalWaveText.textContent = t('Стадия {stage} · Волна {wave}', { stage: this.world.stageId, wave: this.currentWave });
+      if (this.dom.finalWaveText) this.dom.finalWaveText.textContent = t('Уровень {stage} · Волна {wave}', { stage: this.world.stageId, wave: this.currentWave });
       this._updateRunCrystals();
-      this.dom.btnGameOverMenu?.focus();
+      (this.dom.btnNextStage && !this.dom.btnNextStage.hidden ? this.dom.btnNextStage : this.dom.btnGameOverMenu)?.focus();
     });
     this.world.eventBus.on('STAGE_PROGRESS_CHANGED', () => { this._updateStageSelection(); this._updateBestiary(); });
     this.world.eventBus.on('PROGRESS_RESET', () => {
@@ -864,6 +915,7 @@ export class UIManager {
    * Frame-by-frame UI update for continuous metrics (like passive health regeneration).
    */
   update(deltaTime) {
+    this._updateTargetHUD();
     const towers = this.world.getEntitiesWith(TowerComponent, HealthComponent);
     if (towers.length === 0) return;
 
@@ -879,6 +931,36 @@ export class UIManager {
       this._updateHealthHUD(health);
       this._wasRegenerating = false;
     }
+  }
+
+  _updateTargetHUD() {
+    if(!this.dom.targetInfo)return;
+    const tower=this.world.getEntitiesWith(TowerComponent,TargetComponent)[0];
+    const id=tower===undefined?null:this.world.getComponent(tower,TargetComponent)?.targetEntityId;
+    const health=id==null?null:this.world.getComponent(id,HealthComponent),enemy=id==null?null:this.world.getComponent(id,EnemyComponent);
+    if(this.world.inMenu||this.world.isGameOver||!health||health.current<=0||!enemy||this.world.destructionQueue.has(id)) {
+      if(!this.dom.targetInfo.hidden)this.dom.targetInfo.hidden=true;this._targetHudKey=null;return;
+    }
+    const fractal=this.world.getComponent(id,FractalComponent);
+    const damage=enemy.type==='citadel_generator'||enemy.type==='boss_shield'?0:fractal?Math.max(1,Math.round(enemy.damage*(GameConfig.enemies.boss_fractal.damageFloor+(1-GameConfig.enemies.boss_fractal.damageFloor)*getLiveFractalBranchCount(this.world,fractal)/4))):enemy.damage;
+    const hp=`${Math.ceil(health.current).toLocaleString(i18n.locale)} / ${Math.ceil(health.max).toLocaleString(i18n.locale)}`;
+    const attack=enemy.type==='boss_architect'?t('{damage}/с',{damage}):String(damage);
+    const name=t(TARGET_NAMES[enemy.type]||'Противник'),key=`${id}|${name}|${hp}|${attack}`;
+    if(this.dom.targetInfo.hidden)this.dom.targetInfo.hidden=false;
+    if(key===this._targetHudKey)return;
+    this._targetHudKey=key;
+    this.dom.targetName.textContent=name;this.dom.targetHp.textContent=hp;this.dom.targetDamage.textContent=attack;
+    if(this.dom.targetHpCompact) {
+      this.dom.targetHpCompact.textContent=formatTargetNumber(health.current);
+      this.dom.targetHpCompact.title=hp;
+    }
+    if(this.dom.targetDamageCompact) {
+      const compactDamage=formatTargetNumber(damage);
+      this.dom.targetDamageCompact.textContent=enemy.type==='boss_architect'?t('{damage}/с',{damage:compactDamage}):compactDamage;
+      this.dom.targetDamageCompact.title=attack;
+    }
+    const ratio=getHealthRatio(health.current,health.max);
+    this.dom.targetHpFill.style.width=`${ratio*100}%`;this.dom.targetHpFill.style.backgroundColor=getHealthColor(ratio);
   }
 
   _updateHealthHUD(health) {
@@ -1132,6 +1214,7 @@ export class UIManager {
     this.dom.modalHelp?.classList.add('hidden');
     this.switchMenuPage('home');
     this._updateAudioButtons();
+    this._updateTargetHUD();
   }
 
   hideMainMenu() {
@@ -1220,18 +1303,26 @@ export class UIManager {
 export class EnemyIntelRenderer {
   constructor() {
     this.architectVisualCache = new EnemyVisualCache();
+    this.railgunShieldVisual = new RailgunShieldVisual();
     this.architectPainter = {
       corePulseAngle: 0,
       _drawEnemyBody: (ctx, type, render, glow, _core, variant) => {
         if (type === 'boss_scout') drawScoutBossBody(ctx, render, glow);
         else if (type === 'boss_railgun') drawRailgunBody(ctx,render,glow,variant);
+        else if (type === 'boss_citadel') drawCitadelBody(ctx,render,glow,variant);
+        else if (type === 'citadel_generator') drawCitadelGenerator(ctx,render,glow);
+        else if (type === 'boss_fractal') drawFractalCore(ctx,render,glow,variant);
+        else if (type === 'fractal_branch') drawFractalBranch(ctx,render,glow,variant);
         else if (type === 'boss_carrier') drawCarrierBody(ctx, render, glow, variant);
         else drawArchitectBody(ctx, render, glow, variant);
-        drawBossHullHealth(ctx, type, render, { current: 1, max: 1 });
+        if (type==='boss_fractal'||type==='fractal_branch') drawFractalHealth(ctx,render,{current:1,max:1},type==='fractal_branch');
+        else drawBossHullHealth(ctx, type, render, { current: 1, max: 1 });
       },
       _drawBossCore: drawArchitectCore
     };
     this.aegisShieldVisual = new AegisShieldVisual();
+    this.citadelShieldVisual = new CitadelShieldVisual();
+    this.fractalChargeVisual = new FractalChargeVisual();
     this.canvases = [];
     this.animationId = null;
     this.isRunning = false;
@@ -1314,6 +1405,12 @@ export class EnemyIntelRenderer {
         break;
       case 'boss_railgun':
         this._drawBossRailgun(ctx,time);
+        break;
+      case 'boss_citadel':
+        this._drawBossCitadel(ctx,time);
+        break;
+      case 'boss_fractal':
+        this._drawBossFractal(ctx,time);
         break;
     }
   }
@@ -1555,13 +1652,48 @@ export class EnemyIntelRenderer {
     ctx.restore();
   }
 
+  _drawBossFractal(ctx,time) {
+    const cfg=GameConfig.enemies.boss_fractal,branch=GameConfig.enemies.fractal_branch;
+    const scale=46/(cfg.branchOrbit+branch.radius+8),rotation=time*cfg.rotationSpeed;
+    const cycle=time%(cfg.chargeDuration+cfg.beamDuration+cfg.cooldownDuration),phase=cycle<cfg.chargeDuration?'charge':'idle',positions=[];
+    ctx.save();ctx.translate(60,60);ctx.scale(scale,scale);ctx.rotate(rotation);
+    for(let slot=0;slot<4;slot++) {
+      const angle=slot*Math.PI/2,point={x:Math.cos(angle)*cfg.branchOrbit,y:Math.sin(angle)*cfg.branchOrbit};positions.push(point);
+      this.fractalChargeVisual.drawLink(ctx,0,0,point.x,point.y,phase==='charge');
+    }
+    this.architectVisualCache.draw(ctx,this.architectPainter,'boss_fractal',cfg,1,1,phase);
+    for(let slot=0;slot<4;slot++) {
+      const point=positions[slot];ctx.save();ctx.translate(point.x,point.y);ctx.rotate(slot*Math.PI/2);
+      this.architectVisualCache.draw(ctx,this.architectPainter,'fractal_branch',branch,1,1,phase);ctx.restore();
+    }
+    if(phase==='charge')this.fractalChargeVisual.draw(ctx,0,0,positions,cycle/cfg.chargeDuration);
+    ctx.restore();
+  }
+
+  _drawBossCitadel(ctx,time) {
+    const cfg=GameConfig.enemies.boss_citadel,part=GameConfig.enemies.citadel_generator;
+    const scale=46/(getCitadelShieldRadius()*1.08),rotation=time*cfg.rotationSpeed;
+    ctx.save();ctx.translate(60,60);ctx.scale(scale,scale);
+    ctx.save();ctx.rotate(rotation);ctx.globalAlpha *= AEGIS_SHIELD_ATTENUATION.opacity;
+    this.architectVisualCache.draw(ctx,this.architectPainter,'boss_citadel',cfg,1,1,'protected');
+    for(let slot=0;slot<6;slot++) {
+      const angle=slot*Math.PI/3;
+      ctx.save();ctx.translate(Math.cos(angle)*cfg.generatorOrbit,Math.sin(angle)*cfg.generatorOrbit);ctx.rotate(angle);
+      this.architectVisualCache.draw(ctx,this.architectPainter,'citadel_generator',part,1,1);ctx.restore();
+    }
+    ctx.restore();
+    this.citadelShieldVisual.draw(ctx,63,time,rotation,scale);
+    ctx.restore();
+  }
+
   _drawBossRailgun(ctx,time) {
     const cfg=GameConfig.enemies.boss_railgun;
     const cycle=time%(cfg.chargeDuration+cfg.beamDuration+cfg.cooldownDuration+cfg.repositionDuration);
     const phase=cycle<cfg.chargeDuration?'charge':cycle<cfg.chargeDuration+cfg.beamDuration?'firing'
-      :cycle<cfg.chargeDuration+cfg.beamDuration+cfg.cooldownDuration?'cooldown':'idle';
+      :cycle<cfg.chargeDuration+cfg.beamDuration+cfg.repositionDuration?'reposition':'cooldown';
     ctx.save(); ctx.translate(60,60); ctx.rotate(-.25+Math.sin(time*.4)*.1); ctx.scale(44/cfg.radius,44/cfg.radius);
-    this.architectVisualCache.draw(ctx,this.architectPainter,'boss_railgun',cfg,1,1.25,phase); ctx.restore();
+    this.architectVisualCache.draw(ctx,this.architectPainter,'boss_railgun',cfg,1,1.25,phase==='reposition'?'cooldown':phase);
+    this.railgunShieldVisual.draw(ctx,cfg,{phase,shieldHp:1,shieldMax:1,shieldHitRemaining:0,elapsed:time});ctx.restore();
   }
 
   _drawBossScout(ctx, time) {

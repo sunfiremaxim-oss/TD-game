@@ -163,6 +163,85 @@ test('campaign start refuses locked stages and replay restarts the same stage ev
   app.startGame(); assert.deepEqual(started, [3, 3]); assert.equal(app.world.inMenu, true);
 });
 
+test('next level starts the immediate successor with fresh battle stats and the same permanent progress',()=>{
+  const {app}=appSetup(),progress=new imports.PlayerProgress(null);
+  progress.credit(0,1);progress.credit(25,2);progress.upgrades={damage:2,maxHealth:1};
+  app.playerProgress=progress;app.upgradeManager=new imports.UpgradeManager(progress.upgrades,progress.unlockedTiers);
+  app._createTowerEntity();const tower=app.world.getEntitiesWith(TowerComponent)[0];
+  app.upgradeManager.levels.set('damage',15);
+  const eco=app.world.getComponent(tower,imports.EconomyComponent);eco.credits=999;eco.runCrystals=21;eco.crystalsSettled=true;
+  app.world.getComponent(tower,imports.HealthComponent).current=1;
+  const enemy=app.world.createEntity();app.world.addComponent(enemy,new imports.EnemyComponent());
+  const bullet=app.world.createEntity();app.world.addComponent(bullet,new imports.ProjectileComponent(tower,enemy));
+  let resets=0,music=0;
+  app.particleSystem={reset(){resets++;}};app.audioSystem={restartBGM(){music++;}};
+  app.uiManager={selectedStage:8,reset(){},hideMainMenu(){},updateHUD(){}};
+  app.waveSystem=new imports.WaveSystem();
+  Object.assign(app.world,{stageId:2,runOutcome:'victory',isGameOver:true,isPaused:true,gameSpeed:3});
+  assert.equal(app.startNextStage(),true);assert.equal(app.world.stageId,3);assert.equal(app.uiManager.selectedStage,3);
+  assert.equal(app.waveSystem.currentWave,1);assert.equal(app.world.runOutcome,null);assert.equal(app.world.isGameOver,false);
+  assert.equal(app.world.isPaused,false);assert.equal(app.world.gameSpeed,1);assert.equal(resets,1);assert.equal(music,1);
+  assert.equal(app.world.getComponent(tower,imports.AttackComponent).damage,37);
+  const hp=app.world.getComponent(tower,imports.HealthComponent);assert.equal(hp.current,380);assert.equal(hp.max,380);
+  assert.equal(eco.credits,0);assert.equal(eco.runCrystals,0);assert.equal(eco.crystalsSettled,false);assert.equal(progress.crystals,25);
+  assert.equal(app.world.getEntitiesWith(imports.EnemyComponent).length,0);assert.equal(app.world.getEntitiesWith(imports.ProjectileComponent).length,0);
+  assert.equal(app.startNextStage(),false,'a double click cannot skip another level');
+});
+
+test('developer level jump starts locked campaign stages without granting progress and can return from sandbox',()=>{
+  const {app}=appSetup(),progress=new imports.PlayerProgress(null);progress.credit(19);progress.upgrades={damage:2};
+  app.playerProgress=progress;app.upgradeManager=new imports.UpgradeManager(progress.upgrades,progress.unlockedTiers);
+  app._createTowerEntity();const tower=app.world.getEntitiesWith(TowerComponent)[0];
+  app.upgradeManager.levels.set('damage',15);
+  const eco=app.world.getComponent(tower,imports.EconomyComponent);eco.credits=999;eco.runCrystals=21;
+  app.world.getComponent(tower,imports.HealthComponent).current=1;
+  app.particleSystem={reset(){}};app.audioSystem={restartBGM(){}};
+  app.uiManager={selectedStage:1,reset(){},hideMainMenu(){},updateHUD(){}};
+  app.waveSystem=new imports.WaveSystem();app.world.stageId=1;
+  const dev=Object.assign(Object.create(imports.DevTools.prototype),{app,world:app.world,desktop:{matches:true},refresh(){}});
+  let settled=0;app.world.eventBus.on('RUN_CRYSTALS_SETTLED',()=>settled++);
+  assert.equal(progress.isStageUnlocked(4),false);assert.equal(dev.jumpStage(4),true);
+  assert.equal(app.world.stageId,4);assert.equal(app.waveSystem.currentWave,1);assert.equal(app.world.gameSpeed,1);
+  assert.deepEqual(Array.from(app.waveSystem._generateWaveEnemies(20)),['boss_railgun']);
+  assert.equal(app.world.getComponent(tower,imports.HealthComponent).current,300);
+  assert.equal(app.world.getComponent(tower,imports.AttackComponent).damage,37);
+  assert.equal(eco.credits,0);assert.equal(eco.runCrystals,0);assert.equal(settled,0);
+  assert.equal(progress.completedStages,0);assert.equal(progress.crystals,19);assert.equal(progress.isStageUnlocked(4),false);
+  assert.equal(app.uiManager.selectedStage,1,'main-menu selection stays on an unlocked stage');
+  // The wave stress test leaves campaign mode; the level picker restores it.
+  dev.flags={};dev.jumpWave(99);assert.equal(app.world.stageId,null);
+  assert.equal(dev.jumpStage(2),true);assert.equal(app.world.stageId,2);
+  assert.deepEqual(Array.from(app.waveSystem._generateWaveEnemies(20)),['boss_carrier']);
+});
+
+test('next level rejects defeat, active combat, locked successors, the main menu and the last level',()=>{
+  const {app}=appSetup();let restarts=0;
+  app.playerProgress={isStageUnlocked:id=>id<=3};app.restartGame=()=>restarts++;
+  for(const state of [
+    {stageId:2,runOutcome:null,isGameOver:true,inMenu:false},
+    {stageId:2,runOutcome:'victory',isGameOver:false,inMenu:false},
+    {stageId:3,runOutcome:'victory',isGameOver:true,inMenu:false},
+    {stageId:8,runOutcome:'victory',isGameOver:true,inMenu:false},
+    {stageId:2,runOutcome:'victory',isGameOver:true,inMenu:true}
+  ]) {Object.assign(app.world,state);assert.equal(app.startNextStage(),false);}
+  assert.equal(restarts,0);
+});
+
+test('victory opens permanent upgrades with the next unlocked stage and never repeats settlement',()=>{
+  const {app}=appSetup();let returns=0,page=null,settled=0;
+  Object.assign(app.world,{stageId:2,runOutcome:'victory',isGameOver:true,inMenu:false});
+  app.playerProgress={isStageUnlocked:id=>id<=3};
+  app.uiManager={selectedStage:2,_updateBetweenStage(){},_updateStageSelection(){},switchMenuPage(value){page=value;}};
+  app.world.eventBus.on('RUN_CRYSTALS_SETTLED',()=>settled++);
+  app.returnToMenu=()=>{returns++;app.world.inMenu=true;app.world.isGameOver=false;app.world.runOutcome=null;};
+  assert.equal(app.openVictoryUpgrades(),true);assert.equal(returns,1);assert.equal(page,'upgrades');
+  assert.equal(app.uiManager.selectedStage,3);assert.equal(app.uiManager.betweenStageId,3);assert.equal(settled,0);
+  assert.equal(app.openVictoryUpgrades(),false);
+  Object.assign(app.world,{stageId:8,runOutcome:'victory',isGameOver:true,inMenu:false});
+  assert.equal(app.openVictoryUpgrades(),true);assert.equal(app.uiManager.betweenStageId,null);
+  Object.assign(app.world,{runOutcome:null,isGameOver:true,inMenu:false});assert.equal(app.openVictoryUpgrades(),false);
+});
+
 test('ad resume cannot unpause a finished stage or a defeat', () => {
   const { app } = appSetup();
   app.audioSystem = { resumeAfterAd() {} };

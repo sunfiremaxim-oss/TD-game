@@ -159,9 +159,20 @@ test('campaign HUD distinguishes the middle wave from the boss, preserves the fi
   i18n.setLanguage('en');
   try {
     assert.equal(ui._waveLabel(), 'Wave 20/20:');
-    ui._updateResultText(); assert.equal(ui.dom.resultTitle.textContent, 'STAGE CLEARED');
-    assert.equal(ui.dom.finalWaveText.textContent, 'Stage 2 · Wave 20');
-    assert.equal(ui.dom.resultUnlock.textContent, 'Next stage: 3');
-    ui.world.stageId = 8; ui._updateResultText(); assert.equal(ui.dom.resultUnlock.textContent, 'All 8 stages cleared!');
+    ui._updateResultText(); assert.equal(ui.dom.resultTitle.textContent, 'VICTORY');
+    assert.equal(ui.dom.finalWaveText.textContent, 'Level 2 · Wave 20');
+    assert.equal(ui.dom.resultUnlock.textContent, 'Next level: 3');
+    ui.world.stageId = 8; ui._updateResultText(); assert.equal(ui.dom.resultUnlock.textContent, 'All 8 levels cleared!');
   } finally { i18n.setLanguage('ru'); }
+});
+
+test('victory replaces replay with the next unlocked level, while final victory and defeat have appropriate actions',()=>{
+  const ui=Object.create(UIManager.prototype),node=()=>({textContent:'',hidden:false,classList:{toggle(){}}});
+  ui.dom={resultTitle:node(),resultDescription:node(),resultUnlock:node(),btnRestart:node(),btnNextStage:node()};
+  ui.world={stageId:2,runOutcome:'victory'};ui.playerProgress={isStageUnlocked:id=>id<=3};
+  ui._updateResultText();assert.equal(ui.dom.btnRestart.hidden,true);assert.equal(ui.dom.btnNextStage.hidden,false);
+  ui.world.stageId=8;ui._updateResultText();assert.equal(ui.dom.btnNextStage.hidden,true);assert.equal(ui.dom.btnRestart.hidden,true);
+  ui.world.stageId=3;ui._updateResultText();assert.equal(ui.dom.btnNextStage.hidden,true,'locked levels cannot be entered');
+  ui.world.runOutcome=null;ui._updateResultText();assert.equal(ui.dom.btnNextStage.hidden,true);assert.equal(ui.dom.btnRestart.hidden,false);
+  assert.equal(ui.dom.resultUnlock.hidden,true);
 });

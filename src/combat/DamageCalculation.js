@@ -6,10 +6,13 @@ import { ProjectileComponent } from '../components/ProjectileComponent.js';
 import { CarrierComponent } from '../components/CarrierComponent.js';
 import { ArchitectSiegeComponent } from '../components/ArchitectSiegeComponent.js';
 import { RailgunComponent } from '../components/RailgunComponent.js';
+import { getRailgunShieldHealth } from './RailgunMechanics.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { isCombatTargetAvailable } from './CitadelMechanics.js';
 
 // Shared mitigation for real hits and targeting predictions. Does not mutate the world.
 export function calculateMitigatedDamage(world, targetId, rawDamage) {
+  if (!isCombatTargetAvailable(world,targetId)) return 0;
   const armor = world.getComponent(targetId, ArmorComponent);
 
   // Tower upgrades are uncapped; mitigation cannot turn incoming damage into healing.
@@ -24,8 +27,6 @@ export function calculateMitigatedDamage(world, targetId, rawDamage) {
     const cfg = GameConfig.enemies.boss_carrier;
     netDamage = Math.max(1, Math.round(netDamage * (carrier.phase === 'exposed' ? cfg.exposedDamageMultiplier : cfg.closedDamageMultiplier)));
   }
-  const rail = world.getComponent(targetId,RailgunComponent);
-  if (rail?.phase === 'cooldown') netDamage = Math.max(1,Math.round(netDamage * GameConfig.enemies.boss_railgun.coolingDamageMultiplier));
   const siege = world.getComponent(targetId, ArchitectSiegeComponent);
   if (siege) {
     const cfg = GameConfig.enemies.boss_architect;
@@ -72,6 +73,11 @@ export function getExpectedInFlightDamage(world) {
     if (projectile.isEnemy || projectile.targetEntityId == null) continue;
     const damage = calculateMitigatedDamage(world, projectile.targetEntityId, projectile.damage || 0);
     damageByTarget.set(projectile.targetEntityId, (damageByTarget.get(projectile.targetEntityId) || 0) + damage);
+  }
+  // Reserve the shield pool once for the entire volley, not once per bullet.
+  for (const [id,damage] of damageByTarget) {
+    const shield = getRailgunShieldHealth(world.getComponent(id,RailgunComponent));
+    if (shield>0) damageByTarget.set(id,Math.max(0,damage-shield));
   }
   return damageByTarget;
 }

@@ -29,6 +29,7 @@ const ARCHITECT_HEALTH_CELLS = makeHealthCells([[-.43,-.64],[-.3,-.76],[.3,-.76]
 const CARRIER_HEALTH_CELLS = makeHealthCells([[.1,-.17],[-.69,-.65]], 8);
 const SCOUT_BOSS_HEALTH_CELLS = makeHealthCells([[.8,0],[-.4,.6928203]], 6);
 const RAILGUN_HEALTH_CELLS = makeHealthCells([[-.58,-.28],[-.26,-.49],[.17,-.36],[.66,-.19]],8);
+const CITADEL_HEALTH_CELLS = makeHealthCells(Array.from({length:7},(_,i)=>[Math.cos(i*Math.PI/3)*.82,Math.sin(i*Math.PI/3)*.82]),24);
 
 function traceHealthCells(ctx, cells, ratio) {
   ctx.beginPath();
@@ -73,12 +74,17 @@ export function drawScoutBossHealthCells(ctx, radius, ratio, color, background =
 export function drawRailgunHealthCells(ctx,radius,ratio,color,background=false) {
   drawHealthCells(ctx,radius,RAILGUN_HEALTH_CELLS,ratio,color,background);
 }
+export function drawCitadelHealthCells(ctx,radius,ratio,color,background=false) {
+  drawHealthCells(ctx,radius,CITADEL_HEALTH_CELLS,ratio,color,background);
+}
 
 // At most four unblurred strokes per boss. Health is never a sprite key and
 // never invalidates the animated hull; no live gradients or glow are used.
 export function drawBossHullHealth(ctx, type, render, health, armorOpen = 0) {
   const ratio = getHealthRatio(health.current, health.max), color = getHealthColor(ratio);
-  if (type === 'boss_architect') {
+  if (type === 'boss_citadel' || type === 'citadel_generator') {
+    drawCitadelHealthCells(ctx,render.radius,ratio,color);
+  } else if (type === 'boss_architect') {
     for (let side = 0; side < 4; side++) {
       ctx.save(); ctx.rotate(side * Math.PI / 2);
       if (armorOpen > 0) ctx.translate(0, -render.radius * .32 * armorOpen);

@@ -10,6 +10,8 @@ import { TransformComponent } from '../components/TransformComponent.js';
 import { EnemyComponent } from '../components/EnemyComponent.js';
 import { HealthComponent } from '../components/HealthComponent.js';
 import { GameConfig } from '../config/GameConfig.js';
+import { isCombatTargetAvailable } from '../combat/CitadelMechanics.js';
+import { getContactTarget } from '../combat/ContactTargeting.js';
 
 import { getExpectedInFlightDamage } from '../combat/DamageCalculation.js?v=2.7';
 
@@ -23,6 +25,7 @@ export class TargetingSystem {
         if (targetComp && targetComp.targetEntityId === event.entityId) {
           targetComp.targetEntityId = null;
         }
+        if (targetComp?.contactTargetId===event.entityId) {targetComp.contactTargetId=null;targetComp.contactTargetHealth=null;}
       }
     });
   }
@@ -41,11 +44,12 @@ export class TargetingSystem {
 
     // 2. Track globally; WeaponSystem alone enforces the firing range.
     const enemyEntities = world.getEntitiesWith(EnemyComponent, TransformComponent, HealthComponent);
+    const contactId = getContactTarget(world,towerId,targetComp,attack.range,enemyEntities);
     let nearest = null;
     let nearestNeedingDamage = null;
 
     for (const enemyId of enemyEntities) {
-      if (world.destructionQueue.has(enemyId)) continue;
+      if (world.destructionQueue.has(enemyId) || !isCombatTargetAvailable(world,enemyId)) continue;
       const enemyTrans = world.getComponent(enemyId, TransformComponent);
       const enemyHealth = world.getComponent(enemyId, HealthComponent);
 
@@ -60,7 +64,9 @@ export class TargetingSystem {
       }
     }
 
-    const chosen = nearestNeedingDamage || nearest;
+    const contactPosition = contactId==null?null:world.getComponent(contactId,TransformComponent);
+    const chosen = contactPosition ? {id:contactId,x:contactPosition.x,y:contactPosition.y,
+      distanceSquared:(contactPosition.x-towerTrans.x)**2+(contactPosition.y-towerTrans.y)**2} : nearestNeedingDamage || nearest;
     if (!chosen) {
       targetComp.targetEntityId = null;
       return;

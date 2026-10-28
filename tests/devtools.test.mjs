@@ -119,6 +119,16 @@ test('healing, credits and wave jumps affect the current run without resetting u
   dev.jumpWave(201); assert.equal(waves.currentWave, 200);
 });
 
+test('level jump dispatches a fresh run for valid levels only, without changing the wave-jump action',()=>{
+  const {dev,world}=setup(),started=[];
+  dev.app.restartGame=id=>started.push(id);dev.dom={stage:{value:'4'}};
+  assert.equal(dev.execute('stage'),true);assert.deepEqual(started,[4]);
+  for(const id of [0,9,1.5,NaN,Infinity,'4'])assert.equal(dev.jumpStage(id),false);
+  assert.deepEqual(started,[4]);
+  world.isGameOver=true;assert.equal(dev.jumpStage(2),false);
+  world.isGameOver=false;dev.desktop.matches=false;assert.equal(dev.jumpStage(2),false);
+});
+
 test('manual spawn uses wave scaling and custom coordinates; Architect is a single hull without satellites', () => {
   const { world, dev, waves } = setup();
   let progress = null; world.eventBus.on('WAVE_PROGRESS', event => { progress = event; });
@@ -134,6 +144,20 @@ test('manual spawn uses wave scaling and custom coordinates; Architect is a sing
   dev.spawn('scout', 3, 300, '0'); assert.equal(progress.alive, 4); assert.equal(progress.total, 4);
   assert.equal(dev.spawn('boss_shield', 1, 300, '0'), false);
   assert.equal(dev.spawn('fighter', NaN, 300, '0'), false);
+});
+
+test('spawning a Citadel while paused places all six attachments at the requested location immediately',()=>{
+  const {world,dev}=setup();world.isPaused=true;
+  assert.equal(dev.spawn('boss_citadel',1,300,'180'),true);
+  const boss=world.getEntitiesWith(EnemyComponent).find(id=>world.getComponent(id,EnemyComponent).type==='boss_citadel');
+  const position=world.getComponent(boss,TransformComponent);
+  const modules=world.getEntitiesWith(EnemyComponent).filter(id=>world.getComponent(id,EnemyComponent).type==='citadel_generator');
+  assert.equal(modules.length,6);
+  for(const id of modules) {
+    const point=world.getComponent(id,TransformComponent);
+    assert.ok(Math.abs(Math.hypot(point.x-position.x,point.y-position.y)-GameConfig.enemies.boss_citadel.generatorOrbit)<1e-7);
+  }
+  assert.equal(dev._aliveCount(),7);
 });
 
 test('clearing the field removes bosses, segments, projectiles and pending spawns without kill/wave rewards', () => {

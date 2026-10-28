@@ -112,7 +112,7 @@ test('cross-tab access purchases refresh the same wallet and preserve both categ
 
 test('bestiary reveals only completed-stage enemies and delays each synergy until its stage is completed', () => {
   const { progress } = setup();
-  const types = ['scout', 'boss_scout', 'boss_architect', 'fighter', 'boss_carrier', 'tank', 'sniper', 'boss_railgun', 'aegis', 'splitter', 'blinker'];
+  const types = ['scout', 'boss_scout', 'boss_architect', 'fighter', 'boss_carrier', 'tank', 'sniper', 'boss_railgun', 'aegis', 'boss_citadel', 'splitter', 'boss_fractal', 'blinker'];
   const cards = types.map(type => ({ dataset: { enemyCard: type }, hidden: true }));
   const notes = [2, 3, 5].map(stage => ({ dataset: { intelStage: String(stage) }, hidden: true }));
   let refreshes = 0;
@@ -123,7 +123,7 @@ test('bestiary reveals only completed-stage enemies and delays each synergy unti
     if (completed) progress.credit(0, completed);
     ui._updateBestiary();
     const expected = completed === 0 ? ['scout'] : completed === 1 ? ['scout', 'boss_scout']
-      : completed === 2 ? ['scout', 'boss_scout', 'fighter', 'boss_carrier'] : types.slice(0, Math.min(11, completed + 3 + (completed >= 4 ? 1 : 0)));
+      : completed === 2 ? ['scout', 'boss_scout', 'fighter', 'boss_carrier'] : types.slice(0, Math.min(13, completed + 3 + (completed >= 4 ? 1 : 0) + (completed >= 5 ? 1 : 0) + (completed >= 6 ? 1 : 0)));
     assert.deepEqual(cards.filter(c => !c.hidden).map(c => c.dataset.enemyCard), expected);
     assert.deepEqual(notes.map(note => !note.hidden), [completed >= 2, completed >= 3, completed >= 5]);
     const before = refreshes; ui._updateBestiary(); assert.equal(refreshes, before);

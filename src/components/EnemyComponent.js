@@ -26,6 +26,8 @@ export class EnemyComponent {
     this.damage = damage;
     this.meleeCooldown = 0; // ready on first contact
     this.meleeInterval = meleeInterval; // strikes every 1.0s while contacting tower
+    this.meleeAttackRemaining = 0;
+    this.meleeAttackAngle = 0;
 
     // Aegis defensive aura dome
     this.shieldDomeRadius = shieldDomeRadius;

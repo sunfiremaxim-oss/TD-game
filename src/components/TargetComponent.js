@@ -6,5 +6,7 @@
 export class TargetComponent {
   constructor(targetEntityId = null) {
     this.targetEntityId = targetEntityId;
+    this.contactTargetId = null;
+    this.contactTargetHealth = null;
   }
 }

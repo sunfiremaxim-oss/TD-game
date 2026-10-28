@@ -20,10 +20,12 @@ export class RailgunAISystem {
       const health = world.getComponent(id, HealthComponent), enemy = world.getComponent(id, EnemyComponent);
       const rail = world.getComponent(id, RailgunComponent), position = world.getComponent(id, TransformComponent);
       if (health.current <= 0) continue;
+      rail.shieldHitRemaining = Math.max(0,rail.shieldHitRemaining-deltaTime);
       const radius = getRailgunOrbitRadius(world.getComponent(tower, CircleColliderComponent).radius,
         world.getComponent(id, CircleColliderComponent).radius, world.getComponent(tower, AttackComponent).range);
       if (enemy.knockbackRemaining > 0 || Math.abs(Math.hypot(target.x-position.x,target.y-position.y)-radius) > 3) {
         rail.phase = 'approach'; rail.phaseRemaining = 0;
+        rail.shieldHp = rail.shieldMax = 0;
         continue;
       }
       if (rail.phase === 'approach') { rail.phase = 'charge'; rail.phaseRemaining = cfg.chargeDuration; }
@@ -41,10 +43,12 @@ export class RailgunAISystem {
           world.eventBus.emit('ENEMY_SNIPER_SHOT',{sourceId:id,x:position.x,y:position.y});
           world.eventBus.emit('TOWER_HIT',{sourceId:id,sourceHealth:health,damage:enemy.damage,hitX,hitY});
         } else if (rail.phase === 'firing') {
-          rail.phase = 'cooldown'; rail.phaseRemaining = cfg.cooldownDuration;
-        } else if (rail.phase === 'cooldown') {
           rail.phase = 'reposition'; rail.phaseRemaining = cfg.repositionDuration;
+          rail.shieldHp = rail.shieldMax = Math.max(1,Math.round(health.max*cfg.coolingShieldHpFraction));
           rail.orbitDirection *= -1;
+        } else if (rail.phase === 'reposition') {
+          rail.phase = 'cooldown'; rail.phaseRemaining = cfg.cooldownDuration;
+          rail.shieldHp = rail.shieldMax = 0;
         } else {
           rail.phase = 'charge'; rail.phaseRemaining = cfg.chargeDuration;
         }

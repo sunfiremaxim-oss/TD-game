@@ -1,4 +1,5 @@
 import { drawRailgunHealthCells } from './BossHealthVisual.js';
+import { getRailgunShieldHealth } from '../combat/RailgunMechanics.js';
 
 function railgunPolygon(ctx, points) {
   ctx.beginPath(); points.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y));
@@ -46,6 +47,53 @@ export function drawRailgunBody(ctx,render,glowScale=1,phase='idle') {
   ctx.restore();
   for(const side of [-1,1]) {
     ctx.save(); ctx.scale(1,side); drawRailgunHealthCells(ctx,r,0,'',true); ctx.restore();
+  }
+}
+
+// One small shared texture; shield HP changes opacity, never the cache key.
+export class RailgunShieldVisual {
+  constructor(createCanvas=()=>document.createElement('canvas')) {
+    this.createCanvas=createCanvas; this.layer=null;
+  }
+  _build() {
+    this.layer=this.createCanvas(); this.layer.width=192; this.layer.height=160;
+    const c=this.layer.getContext('2d'); c.translate(96,80); c.scale(64,64);
+    const outline=()=>{
+      c.beginPath(); c.moveTo(.70,-.65); c.lineTo(1.02,-.37); c.lineTo(1.13,0);
+      c.lineTo(1.02,.37); c.lineTo(.70,.65); c.lineTo(.83,.25);
+      c.lineTo(.87,0); c.lineTo(.83,-.25); c.closePath();
+    };
+    c.save(); outline(); c.clip();
+    const fill=c.createLinearGradient(.7,0,1.15,0);
+    fill.addColorStop(0,'#66dfff10'); fill.addColorStop(.65,'#75dcff40'); fill.addColorStop(1,'#d1f7ff65');
+    c.fillStyle=fill; c.fillRect(.65,-.72,.55,1.44);
+    c.strokeStyle='#9ceaff66'; c.lineWidth=.009;
+    for(let row=-5;row<=5;row++) for(let col=0;col<5;col++) {
+      const x=.60+col*.15,y=row*.1732+(col%2)*.0866;
+      c.beginPath();
+      for(let i=0;i<6;i++) {
+        const angle=i*Math.PI/3,px=x+Math.cos(angle)*.10,py=y+Math.sin(angle)*.10;
+        if(i)c.lineTo(px,py);else c.moveTo(px,py);
+      }
+      c.closePath();c.stroke();
+    }
+    c.restore(); outline();c.strokeStyle='#79dfff80';c.lineWidth=.013;
+    c.shadowColor='#58d7ff';c.shadowBlur=6;c.stroke();
+    c.shadowBlur=0;c.strokeStyle='#c2f4ff';c.lineWidth=.023;
+    c.beginPath();c.moveTo(.87,-.50);c.lineTo(1.02,-.37);c.lineTo(1.13,0);c.lineTo(1.02,.37);c.lineTo(.87,.50);c.stroke();
+  }
+  draw(ctx,render,rail) {
+    if(getRailgunShieldHealth(rail)<=0||rail.shieldMax<=0) return;
+    if(!this.layer)this._build();
+    const scale=render.radius/64,ratio=Math.max(0,Math.min(1,rail.shieldHp/rail.shieldMax));
+    ctx.save();ctx.shadowBlur=0;
+    ctx.globalAlpha*=.55+.30*ratio+.06*Math.sin(rail.elapsed*5);
+    ctx.drawImage(this.layer,-96*scale,-80*scale,192*scale,160*scale);
+    if(rail.shieldHitRemaining>0) {
+      ctx.globalCompositeOperation='lighter';ctx.globalAlpha*=Math.min(1,rail.shieldHitRemaining/.16);
+      ctx.drawImage(this.layer,-96*scale,-80*scale,192*scale,160*scale);
+    }
+    ctx.restore();
   }
 }
 
